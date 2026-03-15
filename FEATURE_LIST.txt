@@ -1,0 +1,30 @@
+# CALIBERDESK MVP v1.0 - DETAILED FEATURE LIST
+
+## 1. CORE AI FEATURES
+- **AI Match Scores:** A proprietary algorithm that calculates a compatibility percentage between a seeker's profile and a job description, considering skills, experience, and cultural fit.
+- **AI Interviewer:** An interactive module that simulates real-world interview scenarios, providing seekers with feedback on their responses and body language.
+- **Employer AI Copilot:** A backend assistant for recruiters that summarizes candidate profiles, highlights red flags, and suggests top-tier candidates based on historical success data.
+- **Professional AI Assistant:** A general-purpose career assistant available to all users for drafting emails, refining bios, or answering industry-specific questions.
+
+## 2. RECRUITMENT TOOLS
+- **Video Introductions:** Integrated video recording tool allowing seekers to submit a 30-60 second "elevator pitch" with their application.
+- **Aptitude Test Manager:** A custom assessment builder for employers to create technical or cognitive tests.
+- **Aptitude Test Player:** A secure, timed environment for seekers to complete assessments.
+- **Job Search Grounding:** Enhanced search capability that pulls in external market data and verified company information to provide deeper context for job seekers.
+
+## 3. MANAGEMENT MODULES
+- **Organization Management:** Multi-user support for companies, allowing for role-based access control (RBAC) for HR teams.
+- **Onboarding Wizard:** A guided multi-step process for new users to ensure their profiles are 100% complete and optimized for the platform.
+- **Job Management:** A comprehensive dashboard for employers to post, edit, pause, and archive job listings.
+- **Seeker Applications:** A centralized hub for seekers to track every stage of their application journey (Applied, Interviewing, Offered, Rejected).
+
+## 4. ANALYTICS & INSIGHTS
+- **Seeker Analytics:** Visualizes profile views, application success rates, and skill gap analysis.
+- **Employer Analytics:** Tracks time-to-hire, cost-per-hire, and recruiter performance metrics.
+- **Editorial Blog:** A integrated content platform for industry news, career advice, and white papers.
+
+## 5. INFRASTRUCTURE & SECURITY
+- **Company Verification:** A KYC-style workflow for organizations to upload business licenses and tax IDs, earning a "Verified" badge.
+- **Billing & Subscriptions:** Integrated Stripe-ready billing system for managing premium seeker features and employer hiring tiers.
+- **Live Chat:** Real-time WebSocket-based messaging between seekers and employers.
+- **Notifications:** Multi-channel notification system (In-app, Email) for alerts on new matches, messages, and application updates.

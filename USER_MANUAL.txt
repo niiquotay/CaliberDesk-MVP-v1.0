@@ -1,0 +1,64 @@
+# CALIBERDESK MVP v1.0 - USER MANUAL & SYSTEM FLOW
+
+## 1. INTRODUCTION
+CaliberDesk is a next-generation social hiring platform designed to bridge the gap between talent and organizations using advanced AI, video interaction, and data-driven insights.
+
+## 2. USER ROLES
+- **Job Seeker:** Individuals looking for career opportunities and professional growth.
+- **Employer (Organization):** Companies and recruiters looking to hire top talent efficiently.
+- **Staff (Admin):** Internal operators managing platform integrity, verifications, and support.
+
+## 3. USER FLOWS
+
+### 3.1. Job Seeker Journey
+1. **Onboarding:** 
+   - Sign up via Email (requires verification) or Social OAuth (Google/LinkedIn).
+   - Complete the Onboarding Wizard to set initial career goals and preferences.
+2. **Profile Optimization:**
+   - Build a "Neural Identity" including skills, digital certifications, and work history.
+   - Record a **Video Introduction** to provide a human touch to the digital profile.
+   - Use **CV Prep** and **Interview Prep** AI modules to refine application materials.
+3. **Job Discovery:**
+   - Browse the **Seeker Feed** for personalized job matches.
+   - Use **Job Search Grounding** for real-time market data and deep searches.
+   - View **AI Match Scores** to understand compatibility with specific roles.
+4. **Application & Tracking:**
+   - Apply to jobs with one-click "Initialize Session".
+   - Track application status in **Seeker Applications**.
+   - Engage with **Aptitude Tests** assigned by employers.
+5. **Growth:**
+   - Consult the **Career Coach** for AI-driven career pathing.
+   - Monitor performance in **Seeker Analytics**.
+
+### 3.2. Employer Journey
+1. **Organization Setup:**
+   - Register the company and add initial sub-users (Admin, Recruiter, Viewer).
+   - Complete **Company Verification** by uploading official documents.
+2. **Talent Acquisition:**
+   - Post job listings with detailed requirements and benefits.
+   - Set up **Aptitude Tests** to filter candidates automatically.
+3. **Candidate Management:**
+   - Use the **Employer AI Copilot** to analyze candidate pools.
+   - Review **Video Intros** and **AI Match Scores** for instant shortlisting.
+   - Manage the team in **Organization Management**.
+4. **Communication:**
+   - Use **Employer Comm Assistant** to draft personalized outreach.
+   - Engage in **Live Chat** with prospective hires.
+5. **Insights:**
+   - Track recruitment ROI and pipeline health in **Employer Analytics**.
+
+### 3.3. Staff Journey
+1. **System Oversight:**
+   - Access the **Admin Dashboard** for a bird's-eye view of platform activity.
+2. **Verification Handling:**
+   - Review and approve/reject company verification requests.
+3. **Content Management:**
+   - Publish industry insights and reports via the **Editorial Blog**.
+
+## 4. NAVIGATION
+The platform uses a modular layout with a sidebar for quick access to:
+- **Feed/Dashboard:** Primary workspace.
+- **AI Tools:** Suite of professional assistants.
+- **Management:** Jobs, Applications, or Team settings.
+- **Insights:** Analytics and Blog.
+- **Settings:** Profile and Billing management.
