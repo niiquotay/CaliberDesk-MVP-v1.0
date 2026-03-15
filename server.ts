@@ -10,7 +10,7 @@ import fs from "fs";
 import { fileURLToPath } from "url";
 import { OAuth2Client } from "google-auth-library";
 import { createClient } from "@supabase/supabase-js";
-import { MOCK_USER, MOCK_EMPLOYER, STAFF_ACCOUNTS } from "./constants";
+import { MOCK_USER, MOCK_EMPLOYER, STAFF_ACCOUNTS, MOCK_JOBS, MOCK_BLOG_POSTS, MOCK_APTITUDE_TESTS } from "./constants";
 import { UserProfile } from "./types";
 
 dotenv.config();
@@ -18,9 +18,14 @@ dotenv.config();
 const supabaseUrl = process.env.VITE_SUPABASE_URL || "";
 const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || "";
 
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.warn("Supabase credentials missing. Database operations will fail.");
+}
+
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 async function startServer() {
+  console.log("Initializing server...");
   const app = express();
   const PORT = 3000;
   const JWT_SECRET = process.env.JWT_SECRET || "fallback_secret";
@@ -37,6 +42,11 @@ async function startServer() {
 
   app.use(express.json());
   app.use(cookieParser());
+
+  app.get("/api/health", (req, res) => {
+    console.log("Health check requested");
+    res.json({ status: "ok", timestamp: new Date().toISOString() });
+  });
 
   // ID Generation Utility
   const generateIdNumber = (prefix: string) => {
@@ -79,7 +89,7 @@ async function startServer() {
       if (u.isEmployer && !u.isVerified && !u.isDeactivated && u.joinedDate) {
         const joined = new Date(u.joinedDate);
         const diffDays = Math.ceil((now.getTime() - joined.getTime()) / (1000 * 60 * 60 * 24));
-        if (diffDays > 35) {
+        if (diffDays > 3) {
           await supabase.from('users').update({ isDeactivated: true, deactivationDate: now.toISOString() }).eq('id', u.id);
           console.log(`[SYSTEM] Deactivated unverified employer account: ${u.email}`);
         }
@@ -93,8 +103,8 @@ async function startServer() {
 
   // Seed mock users if database is empty
   const seedMockUsers = async () => {
-    const { count } = await supabase.from('users').select('*', { count: 'exact', head: true });
-    if (count === 0) {
+    const { count: userCount } = await supabase.from('users').select('*', { count: 'exact', head: true });
+    if (userCount === 0) {
       console.log("[SYSTEM] Seeding mock users to Supabase...");
       const mockUsers = [
         { ...MOCK_USER, idNumber: generateIdNumber('SKR'), password: "user123", joinedDate: new Date().toISOString(), isVerified: true },
@@ -108,8 +118,53 @@ async function startServer() {
         }))
       ];
       const { error } = await supabase.from('users').insert(mockUsers);
-      if (error) console.error("[SYSTEM] Seeding error:", error);
+      if (error) console.error("[SYSTEM] Seeding users error:", error);
       else console.log("[SYSTEM] Mock users seeded successfully.");
+    }
+
+    const { count: jobCount } = await supabase.from('jobs').select('*', { count: 'exact', head: true });
+    if (jobCount === 0) {
+      console.log("[SYSTEM] Seeding mock jobs to Supabase...");
+      const { data: users } = await supabase.from('users').select('id, companyName').eq('isEmployer', true);
+      const employerId = users?.[0]?.id;
+
+      const mockJobs = MOCK_JOBS.map(j => ({
+        ...j,
+        postedBy: employerId,
+        postedAt: new Date().toISOString()
+      }));
+      const { error } = await supabase.from('jobs').insert(mockJobs);
+      if (error) console.error("[SYSTEM] Seeding jobs error:", error);
+      else console.log("[SYSTEM] Mock jobs seeded successfully.");
+    }
+
+    const { count: blogCount } = await supabase.from('blog_posts').select('*', { count: 'exact', head: true });
+    if (blogCount === 0) {
+      console.log("[SYSTEM] Seeding mock blog posts to Supabase...");
+      const mockPosts = MOCK_BLOG_POSTS.map(p => ({
+        ...p,
+        publishedAt: new Date().toISOString()
+      }));
+      const { error } = await supabase.from('blog_posts').insert(mockPosts);
+      if (error) console.error("[SYSTEM] Seeding blog posts error:", error);
+      else console.log("[SYSTEM] Mock blog posts seeded successfully.");
+    }
+
+    const { count: testCount } = await supabase.from('aptitude_tests').select('*', { count: 'exact', head: true });
+    if (testCount === 0) {
+      console.log("[SYSTEM] Seeding mock aptitude tests to Supabase...");
+      const { data: jobs } = await supabase.from('jobs').select('id, idNumber');
+      const mockTests = MOCK_APTITUDE_TESTS.map(t => {
+        const job = jobs?.find(j => j.idNumber === t.jobId);
+        return {
+          ...t,
+          jobId: job?.id,
+          createdAt: new Date().toISOString()
+        };
+      });
+      const { error } = await supabase.from('aptitude_tests').insert(mockTests);
+      if (error) console.error("[SYSTEM] Seeding tests error:", error);
+      else console.log("[SYSTEM] Mock aptitude tests seeded successfully.");
     }
   };
   seedMockUsers();
@@ -331,7 +386,7 @@ async function startServer() {
 
     if (user.isDeactivated) {
       return res.status(403).json({ 
-        message: "Your account has been deactivated due to incomplete verification within 35 days. Please contact support@caliberdesk.com to reactivate." 
+        message: "Your account has been deactivated due to incomplete verification within 3 days. Please contact support@caliberdesk.com to reactivate." 
       });
     }
 
@@ -369,6 +424,17 @@ async function startServer() {
 
     if (error) return res.status(500).json({ message: "Failed to fetch pending verifications" });
     res.json(pending.map(({ password, ...u }) => u));
+  });
+
+  app.get("/api/admin/users", authenticateToken, async (req: any, res) => {
+    if (!req.user.isAdmin && !req.user.opRole) return res.status(403).json({ message: "Forbidden" });
+    
+    const { data: users, error } = await supabase
+      .from('users')
+      .select('*');
+
+    if (error) return res.status(500).json({ message: "Failed to fetch users" });
+    res.json(users.map(({ password, ...u }) => u));
   });
 
   app.post("/api/employer/verify-email-request", authenticateToken, async (req: any, res) => {
@@ -466,6 +532,192 @@ async function startServer() {
   app.post("/api/auth/logout", (req, res) => {
     res.clearCookie("token", { httpOnly: true, secure: true, sameSite: "none" });
     res.json({ message: "Logged out successfully" });
+  });
+
+  // Jobs Routes
+  app.get("/api/jobs", async (req, res) => {
+    const { data: jobs, error } = await supabase
+      .from('jobs')
+      .select('*')
+      .eq('status', 'active')
+      .order('postedAt', { ascending: false });
+    
+    if (error) return res.status(500).json({ message: "Failed to fetch jobs" });
+    res.json(jobs);
+  });
+
+  app.get("/api/jobs/:id", async (req, res) => {
+    const { data: job, error } = await supabase
+      .from('jobs')
+      .select('*, aptitude_tests(*)')
+      .or(`id.eq.${req.params.id},idNumber.eq.${req.params.id}`)
+      .single();
+    
+    if (error || !job) return res.status(404).json({ message: "Job not found" });
+    res.json(job);
+  });
+
+  app.post("/api/jobs", authenticateToken, async (req: any, res) => {
+    if (!req.user.isEmployer && !req.user.isAdmin) {
+      return res.status(403).json({ message: "Only employers can post jobs" });
+    }
+
+    const { data: user } = await supabase.from('users').select('id, companyName').eq('email', req.user.email).single();
+    
+    const newJob = {
+      ...req.body,
+      postedBy: user?.id,
+      company: user?.companyName || req.body.company,
+      postedAt: new Date().toISOString(),
+      idNumber: generateIdNumber('JOB'),
+      status: 'active'
+    };
+
+    const { data: insertedJob, error } = await supabase.from('jobs').insert([newJob]).select().single();
+    if (error) return res.status(500).json({ message: "Failed to post job" });
+    
+    res.json(insertedJob);
+  });
+
+  // Blog Routes
+  app.get("/api/blog", async (req, res) => {
+    const { data: posts, error } = await supabase
+      .from('blog_posts')
+      .select('*')
+      .eq('isDraft', false)
+      .order('publishedAt', { ascending: false });
+    
+    if (error) return res.status(500).json({ message: "Failed to fetch blog posts" });
+    res.json(posts);
+  });
+
+  app.get("/api/blog/:id", async (req, res) => {
+    const { data: post, error } = await supabase
+      .from('blog_posts')
+      .select('*')
+      .eq('id', req.params.id)
+      .single();
+    
+    if (error || !post) return res.status(404).json({ message: "Post not found" });
+    res.json(post);
+  });
+
+  app.post("/api/blog", authenticateToken, async (req: any, res) => {
+    // Only admins can post to blog
+    const { data: user } = await supabase.from('users').select('isAdmin, opRole').eq('email', req.user.email).single();
+    if (!user?.isAdmin && user?.opRole !== 'super_admin') {
+      return res.status(403).json({ message: "Unauthorized" });
+    }
+
+    const { data: post, error } = await supabase.from('blog_posts').insert([req.body]).select().single();
+    if (error) return res.status(500).json({ message: "Failed to create post" });
+    res.json(post);
+  });
+
+  app.patch("/api/blog/:id", authenticateToken, async (req: any, res) => {
+    const { data: user } = await supabase.from('users').select('isAdmin, opRole').eq('email', req.user.email).single();
+    if (!user?.isAdmin && user?.opRole !== 'super_admin') {
+      return res.status(403).json({ message: "Unauthorized" });
+    }
+
+    const { data: post, error } = await supabase.from('blog_posts').update(req.body).eq('id', req.params.id).select().single();
+    if (error) return res.status(500).json({ message: "Failed to update post" });
+    res.json(post);
+  });
+
+  app.delete("/api/blog/:id", authenticateToken, async (req: any, res) => {
+    const { data: user } = await supabase.from('users').select('isAdmin, opRole').eq('email', req.user.email).single();
+    if (!user?.isAdmin && user?.opRole !== 'super_admin') {
+      return res.status(403).json({ message: "Unauthorized" });
+    }
+
+    const { error } = await supabase.from('blog_posts').delete().eq('id', req.params.id);
+    if (error) return res.status(500).json({ message: "Failed to delete post" });
+    res.json({ message: "Post deleted" });
+  });
+
+  // Aptitude Test Routes
+  app.get("/api/aptitude-tests", async (req, res) => {
+    const { data: tests, error } = await supabase.from('aptitude_tests').select('*');
+    if (error) return res.status(500).json({ message: "Failed to fetch aptitude tests" });
+    res.json(tests);
+  });
+
+  app.post("/api/aptitude-tests", authenticateToken, async (req: any, res) => {
+    const { data: user } = await supabase.from('users').select('isAdmin, opRole').eq('email', req.user.email).single();
+    if (!user?.isAdmin && user?.opRole !== 'super_admin') {
+      return res.status(403).json({ message: "Unauthorized" });
+    }
+
+    const { data: test, error } = await supabase.from('aptitude_tests').insert([req.body]).select().single();
+    if (error) return res.status(500).json({ message: "Failed to create aptitude test" });
+    res.json(test);
+  });
+
+  // Application Routes
+  app.post("/api/applications", authenticateToken, async (req: any, res) => {
+    const { jobId, matchScore, matchReason, isAutoApplied } = req.body;
+    
+    const { data: user } = await supabase.from('users').select('id').eq('email', req.user.email).single();
+    
+    const newApplication = {
+      jobId,
+      userId: user?.id,
+      status: 'applied',
+      appliedDate: new Date().toISOString(),
+      matchScore,
+      matchReason,
+      isAutoApplied: !!isAutoApplied,
+      statusHistory: [{ status: 'applied', date: new Date().toISOString() }]
+    };
+
+    const { data: insertedApp, error } = await supabase.from('applications').insert([newApplication]).select().single();
+    if (error) return res.status(500).json({ message: "Failed to submit application" });
+    
+    res.json(insertedApp);
+  });
+
+  app.get("/api/my-applications", authenticateToken, async (req: any, res) => {
+    const { data: user } = await supabase.from('users').select('id').eq('email', req.user.email).single();
+    
+    const { data: apps, error } = await supabase
+      .from('applications')
+      .select('*, jobs(*)')
+      .eq('userId', user?.id)
+      .order('appliedDate', { ascending: false });
+    
+    if (error) return res.status(500).json({ message: "Failed to fetch applications" });
+    res.json(apps);
+  });
+
+  app.patch("/api/jobs/:id", authenticateToken, async (req: any, res) => {
+    const { status } = req.body;
+    const { data: job, error } = await supabase
+      .from('jobs')
+      .update({ status })
+      .eq('id', req.params.id)
+      .select()
+      .single();
+    
+    if (error) return res.status(500).json({ message: "Failed to update job" });
+    res.json(job);
+  });
+
+  app.patch("/api/applications/:id", authenticateToken, async (req: any, res) => {
+    const { status, dueDate } = req.body;
+    const updateData: any = {};
+    if (status) updateData.status = status;
+    if (dueDate) updateData.dueDate = dueDate;
+
+    const { data: app, error } = await supabase
+      .from('applications')
+      .update(updateData)
+      .eq('id', req.params.id)
+      .select()
+      .single();
+    
+    if (error) return res.status(500).json({ message: "Failed to update application" });
+    res.json(app);
   });
 
   // OAuth Routes
@@ -753,11 +1005,8 @@ async function startServer() {
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = path.dirname(__filename);
 
-  const server = app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-  });
-
   // Vite middleware for development
+  console.log("Setting up Vite middleware...");
   if (process.env.NODE_ENV !== "production") {
     console.log("Initializing Vite dev server...");
     try {
@@ -770,7 +1019,7 @@ async function startServer() {
       app.use(vite.middlewares);
       
       // Fallback for SPA routes in dev mode
-      app.use("*all", async (req, res, next) => {
+      app.get("*", async (req, res, next) => {
         if (req.originalUrl.startsWith("/api")) return next();
         try {
           const template = fs.readFileSync(path.resolve(__dirname, "index.html"), "utf-8");
@@ -787,11 +1036,30 @@ async function startServer() {
   } else {
     const distPath = path.resolve(__dirname, "dist");
     app.use(express.static(distPath));
-    app.get("*all", (req, res) => {
+    app.get("*", (req, res) => {
       res.sendFile(path.resolve(distPath, "index.html"));
     });
   }
+
+  // Global error handler
+  app.use((err: any, req: any, res: any, next: any) => {
+    console.error("Global Error Handler:", err);
+    res.status(500).json({ error: "Internal Server Error", message: err.message });
+  });
+
+  console.log("Starting listener on port", PORT);
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`Server running on http://localhost:${PORT}`);
+  });
 }
+
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("Unhandled Rejection at:", promise, "reason:", reason);
+});
+
+process.on("uncaughtException", (err) => {
+  console.error("Uncaught Exception:", err);
+});
 
 startServer().catch(err => {
   console.error("Failed to start server:", err);

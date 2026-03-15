@@ -309,12 +309,30 @@ const MarketNewsCard: React.FC<{ post: BlogPost; onClick: () => void }> = ({ pos
 };
 
 const Blog: React.FC<BlogProps> = ({ user, category, jobs, applications }) => {
-  const [posts, setPosts] = useState<BlogPost[]>(MOCK_BLOG_POSTS);
+  const [posts, setPosts] = useState<BlogPost[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [selectedPost, setSelectedPost] = useState<BlogPost | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editPost, setEditPost] = useState<Partial<BlogPost> | null>(null);
   const [activeCategory, setActiveCategory] = useState<string>(category || 'Market Data');
   const [selectedEvent, setSelectedEvent] = useState<CaliberEvent | null>(null);
+
+  React.useEffect(() => {
+    const fetchPosts = async () => {
+      try {
+        const response = await fetch('/api/blog');
+        if (response.ok) {
+          const data = await response.json();
+          setPosts(data);
+        }
+      } catch (err) {
+        console.error("Failed to fetch blog posts", err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchPosts();
+  }, []);
 
   React.useEffect(() => {
     if (category) {
@@ -360,28 +378,48 @@ const Blog: React.FC<BlogProps> = ({ user, category, jobs, applications }) => {
     setIsEditing(true);
   };
 
-  const handleSavePost = () => {
+  const handleSavePost = async () => {
     if (!editPost?.title || !editPost?.content) return;
 
-    const postToSave = editPost as BlogPost;
-    setPosts(prev => {
-      const exists = prev.find(p => p.id === postToSave.id);
-      if (exists) {
-        return prev.map(p => p.id === postToSave.id ? postToSave : p);
+    const isNew = !posts.find(p => p.id === editPost.id);
+    const method = isNew ? 'POST' : 'PATCH';
+    const url = isNew ? '/api/blog' : `/api/blog/${editPost.id}`;
+
+    try {
+      const response = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editPost)
+      });
+
+      if (response.ok) {
+        const savedPost = await response.json();
+        setPosts(prev => {
+          if (isNew) return [savedPost, ...prev];
+          return prev.map(p => p.id === savedPost.id ? savedPost : p);
+        });
+        setIsEditing(false);
+        setEditPost(null);
+        if (selectedPost?.id === savedPost.id) {
+          setSelectedPost(savedPost);
+        }
       }
-      return [postToSave, ...prev];
-    });
-    setIsEditing(false);
-    setEditPost(null);
-    if (selectedPost?.id === postToSave.id) {
-      setSelectedPost(postToSave);
+    } catch (err) {
+      console.error("Failed to save post", err);
     }
   };
 
-  const handleDeletePost = (id: string) => {
+  const handleDeletePost = async (id: string) => {
     if (window.confirm('Are you sure you want to delete this post?')) {
-      setPosts(prev => prev.filter(p => p.id !== id));
-      if (selectedPost?.id === id) setSelectedPost(null);
+      try {
+        const response = await fetch(`/api/blog/${id}`, { method: 'DELETE' });
+        if (response.ok) {
+          setPosts(prev => prev.filter(p => p.id !== id));
+          if (selectedPost?.id === id) setSelectedPost(null);
+        }
+      } catch (err) {
+        console.error("Failed to delete post", err);
+      }
     }
   };
 

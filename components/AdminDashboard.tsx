@@ -35,6 +35,7 @@ interface AdminDashboardProps {
   onNavigateToBlog?: () => void;
   onSelectJob?: (job: Job) => void;
   initialTab?: string;
+  allUsers: UserProfile[];
 }
 
 const STAGES: { value: ApplicationStatus; label: string; icon: any; color: string; bgColor: string }[] = [
@@ -63,7 +64,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onPostJob,
   onNavigateToBlog,
   onSelectJob,
-  initialTab
+  initialTab,
+  allUsers
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const opRole = user.opRole || 'super_admin';
@@ -88,7 +90,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setStaffMembers(staffMembers.filter(s => s.id !== id));
   };
 
-  // Stats logic
   const stats = useMemo(() => {
     const totalRevenue = transactions.reduce((acc, curr) => acc + curr.amount, 0);
     const activeJobs = jobs.filter(j => j.status === 'active').length;
@@ -585,7 +586,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
       )}
 
       {viewTab === 'users' && (
-        <UserDirectoryTable />
+        <UserDirectoryTable users={allUsers} />
       )}
 
       {/* MODAL: ADD STAFF */}
@@ -906,36 +907,48 @@ const RecentActivity = () => (
   </div>
 );
 
-const UserDirectoryTable = () => (
-  <div className="glass-premium rounded-2xl border border-white/5 overflow-hidden shadow-sm animate-in slide-in-from-bottom-4 duration-500">
-    <div className="p-6 border-b border-white/5 bg-white/5 flex items-center justify-between">
-      <div>
-        <h3 className="text-xs font-black uppercase tracking-widest text-white">User identity management</h3>
-        <p className="text-[9px] font-black uppercase tracking-[0.2em] text-white/40 mt-0.5">Global directory of talent and employers</p>
+const UserDirectoryTable = ({ users }: { users: UserProfile[] }) => {
+  const [searchQuery, setSearchQuery] = useState('');
+  
+  const filteredUsers = useMemo(() => {
+    return users.filter(u => 
+      u.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+      u.email.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [users, searchQuery]);
+
+  return (
+    <div className="glass-premium rounded-2xl border border-white/5 overflow-hidden shadow-sm animate-in slide-in-from-bottom-4 duration-500">
+      <div className="p-6 border-b border-white/5 bg-white/5 flex items-center justify-between">
+        <div>
+          <h3 className="text-xs font-black uppercase tracking-widest text-white">User identity management</h3>
+          <p className="text-[9px] font-black uppercase tracking-[0.2em] text-white/40 mt-0.5">Global directory of talent and employers</p>
+        </div>
+        <div className="relative">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/20" />
+          <input 
+            type="text" 
+            placeholder="Search by name or email..." 
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-2 text-[10px] text-white outline-none focus:border-[#41d599] w-64"
+          />
+        </div>
       </div>
-      <div className="relative">
-        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/20" />
-        <input 
-          type="text" 
-          placeholder="Search by name or email..." 
-          className="bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-2 text-[10px] text-white outline-none focus:border-[#41d599] w-64"
-        />
-      </div>
-    </div>
-    <div className="overflow-x-auto">
-      <table className="w-full text-left">
-        <thead className="bg-white/5 text-[8px] font-black uppercase tracking-[0.25em] text-white/50 border-b border-white/5">
-          <tr>
-            <th className="px-6 py-4">User profile</th>
-            <th className="px-6 py-4">Role</th>
-            <th className="px-6 py-4">Location</th>
-            <th className="px-6 py-4">Status</th>
-            <th className="px-6 py-4 text-right">Actions</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-white/5 text-[10px] font-medium">
-          {MOCK_USER_DIRECTORY.map((u, idx) => (
-            <tr key={idx} className="hover:bg-white/5 transition-colors">
+      <div className="overflow-x-auto">
+        <table className="w-full text-left">
+          <thead className="bg-white/5 text-[8px] font-black uppercase tracking-[0.25em] text-white/50 border-b border-white/5">
+            <tr>
+              <th className="px-6 py-4">User profile</th>
+              <th className="px-6 py-4">Role</th>
+              <th className="px-6 py-4">Location</th>
+              <th className="px-6 py-4">Status</th>
+              <th className="px-6 py-4 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-white/5 text-[10px] font-medium">
+            {filteredUsers.map((u, idx) => (
+              <tr key={u.id || idx} className="hover:bg-white/5 transition-colors">
               <td className="px-6 py-4">
                 <div className="flex items-center gap-4">
                   <div className="w-8 h-8 rounded-lg bg-white/5 overflow-hidden border border-white/10">
@@ -977,6 +990,7 @@ const UserDirectoryTable = () => (
     </div>
   </div>
 );
+};
 
 const TicketsTable = () => {
   return (

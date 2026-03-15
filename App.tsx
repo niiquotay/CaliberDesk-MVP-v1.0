@@ -123,11 +123,11 @@ const App: React.FC = () => {
     if (window.location.pathname === '/admin' || window.location.pathname === '/staff-login' || window.location.pathname === '/signin') return 'signin';
     return 'home';
   });
-  const [jobs, setJobs] = useState<Job[]>(MOCK_JOBS);
+  const [jobs, setJobs] = useState<Job[]>([]);
   const [isLoadingJobs, setIsLoadingJobs] = useState(true);
   const [user, setUser] = useState<UserProfile>(INITIAL_GUEST);
-  const [applications, setApplications] = useState<Application[]>(MOCK_APPLICATIONS);
-  const [aptitudeTests, setAptitudeTests] = useState<AptitudeTest[]>(MOCK_APTITUDE_TESTS);
+  const [applications, setApplications] = useState<Application[]>([]);
+  const [aptitudeTests, setAptitudeTests] = useState<AptitudeTest[]>([]);
   const [detailedJob, setDetailedJob] = useState<Job | null>(null);
   const [inspectJob, setInspectJob] = useState<Job | null>(null);
   const [showJobAlerts, setShowJobJobAlerts] = useState(false);
@@ -150,6 +150,7 @@ const App: React.FC = () => {
   const [pendingVerifications, setPendingVerifications] = useState<UserProfile[]>([]);
   const [showVerificationModal, setShowVerificationModal] = useState(false);
   const [showVerificationReminder, setShowVerificationReminder] = useState(false);
+  const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
 
   useEffect(() => {
     const handlePopState = () => {
@@ -172,11 +173,44 @@ const App: React.FC = () => {
   }, [user]);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsLoadingJobs(false);
-    }, 1500);
-    return () => clearTimeout(timer);
+    const fetchInitialData = async () => {
+      try {
+        const [jobsRes, appsRes, testsRes] = await Promise.all([
+          fetch('/api/jobs'),
+          fetch('/api/my-applications'),
+          fetch('/api/aptitude-tests')
+        ]);
+        
+        if (jobsRes.ok) {
+          const jobsData = await jobsRes.json();
+          setJobs(jobsData);
+        }
+        
+        if (appsRes.ok) {
+          const appsData = await appsRes.json();
+          setApplications(appsData);
+        }
+
+        if (testsRes.ok) {
+          const testsData = await testsRes.json();
+          setAptitudeTests(testsData);
+        }
+        
+        setIsLoadingJobs(false);
+      } catch (err) {
+        console.error("Failed to fetch initial data:", err);
+        setIsLoadingJobs(false);
+      }
+    };
+    fetchInitialData();
   }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (isLoadingJobs) setIsLoadingJobs(false);
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, [isLoadingJobs]);
 
   useEffect(() => {
     const checkKey = async () => {
@@ -558,6 +592,7 @@ const App: React.FC = () => {
           if (data.isAdmin || data.opRole) {
             setView('admin');
             fetchPendingVerifications();
+            fetchAllUsers();
           }
           else if (data.isEmployer) {
             setView('employer');
@@ -583,6 +618,18 @@ const App: React.FC = () => {
       }
     } catch (err) {
       console.error('Failed to fetch pending verifications:', err);
+    }
+  };
+
+  const fetchAllUsers = async () => {
+    try {
+      const response = await fetch('/api/admin/users');
+      if (response.ok) {
+        const data = await response.json();
+        setAllUsers(data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch all users:', err);
     }
   };
 
@@ -669,16 +716,26 @@ const App: React.FC = () => {
     }
 
     if (!job.aptitudeTestId) {
-      const newApp: Application = {
-        id: Math.random().toString(36).substr(2, 9),
-        jobId: job.id,
-        status: 'applied',
-        appliedDate: new Date().toISOString(),
-        candidateProfile: user,
-        statusHistory: [{ status: 'applied', date: new Date().toISOString() }]
+      const submitApplication = async () => {
+        try {
+          const response = await fetch('/api/applications', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ jobId: job.id })
+          });
+          
+          if (response.ok) {
+            const newApp = await response.json();
+            setApplications(prev => [newApp, ...prev]);
+            setToast({ message: "Profile Deployed Successfully", type: 'success' });
+          } else {
+            setToast({ message: "Failed to submit application", type: 'error' });
+          }
+        } catch (err) {
+          setToast({ message: "Network error during application", type: 'error' });
+        }
       };
-      setApplications(prev => [...prev, newApp]);
-      setToast({ message: "Profile Deployed Successfully", type: 'success' });
+      submitApplication();
       return;
     }
 
@@ -826,26 +883,54 @@ const App: React.FC = () => {
     }
   };
 
-  const handlePostJob = (job: Job) => {
-    setJobs(prev => {
-      const existing = prev.find(j => j.id === job.id);
-      if (existing) {
-        return prev.map(j => j.id === job.id ? job : j);
+  const handlePostJob = async (job: Job) => {
+    try {
+      const response = await fetch('/api/jobs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(job)
+      });
+      
+      if (response.ok) {
+        const savedJob = await response.json();
+        setJobs(prev => {
+          const existing = prev.find(j => j.id === savedJob.id);
+          if (existing) {
+            return prev.map(j => j.id === savedJob.id ? savedJob : j);
+          }
+          return [savedJob, ...prev];
+        });
+        setEditingJob(null);
+        setToast({ message: "Job posted successfully", type: 'success' });
+        processJobAutomations(savedJob).catch(err => console.error("processJobAutomations unhandled error:", err));
+      } else {
+        setToast({ message: "Failed to post job", type: 'error' });
       }
-      return [job, ...prev];
-    });
-    setEditingJob(null);
-    processJobAutomations(job).catch(err => console.error("processJobAutomations unhandled error:", err));
+    } catch (err) {
+      setToast({ message: "Network error posting job", type: 'error' });
+    }
   };
 
-  const handleUpdateJobStatus = (jobId: string, status: 'active' | 'closed' | 'draft') => {
-    setJobs(prev => prev.map(j => {
-      if (j.id === jobId) {
-        return { ...j, status };
+  const handleUpdateJobStatus = async (jobId: string, status: 'active' | 'closed' | 'draft') => {
+    try {
+      const response = await fetch(`/api/jobs/${jobId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status })
+      });
+      
+      if (response.ok) {
+        setJobs(prev => prev.map(j => {
+          if (j.id === jobId) {
+            return { ...j, status };
+          }
+          return j;
+        }));
+        setToast({ message: `Job marked as ${status.toUpperCase()}.`, type: 'success' });
       }
-      return j;
-    }));
-    setToast({ message: `Job marked as ${status.toUpperCase()}.`, type: 'success' });
+    } catch (err) {
+      setToast({ message: "Failed to update job status", type: 'error' });
+    }
   };
 
   const handleDeleteJob = (jobId: string) => {
@@ -1011,65 +1096,82 @@ const App: React.FC = () => {
     setToast({ message: "Alert Criterion Purged", type: 'info' });
   };
 
-  const handleUpdateApplicationStatus = useCallback((appId: string, status: ApplicationStatus) => {
-    setApplications(prev => {
-      const appToUpdate = prev.find(a => a.id === appId);
-      if (!appToUpdate) return prev;
+  const handleUpdateApplicationStatus = useCallback(async (appId: string, status: ApplicationStatus) => {
+    const appToUpdate = applications.find(a => a.id === appId);
+    if (!appToUpdate) return;
 
-      const isRejection = status === 'rejected';
-      // If it's not a rejection and it's a move to a new stage, it needs acceptance
-      const needsAcceptance = !isRejection && status !== appToUpdate.status && status !== 'applied' && status !== 'viewed';
+    const isRejection = status === 'rejected';
+    const needsAcceptance = !isRejection && status !== appToUpdate.status && status !== 'applied' && status !== 'viewed';
 
-      let updatedApp;
-      if (needsAcceptance) {
-        updatedApp = { ...appToUpdate, proposedStatus: status };
-      } else {
-        updatedApp = { 
-          ...appToUpdate, 
-          status, 
-          proposedStatus: undefined,
-          statusHistory: [...(appToUpdate.statusHistory || []), { status, date: new Date().toISOString() }]
-        };
+    try {
+      const updatePayload = needsAcceptance ? { proposedStatus: status } : { status, proposedStatus: null };
+      const response = await fetch(`/api/applications/${appId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatePayload)
+      });
+
+      if (response.ok) {
+        setApplications(prev => {
+          const updatedApp = needsAcceptance 
+            ? { ...appToUpdate, proposedStatus: status }
+            : { 
+                ...appToUpdate, 
+                status, 
+                proposedStatus: undefined,
+                statusHistory: [...(appToUpdate.statusHistory || []), { status, date: new Date().toISOString() }]
+              };
+
+          const updated = prev.map(app => app.id === appId ? updatedApp : app);
+          const job = jobs.find(j => j.id === updatedApp.jobId);
+          
+          if (job) {
+            if (needsAcceptance) {
+              setToast({ message: `Invitation to ${status.replace('-', ' ')} stage sent. Seeker must accept.`, type: 'info' });
+              const msg = `You have been invited to the ${status.replace('-', ' ')} stage for ${job.title} at ${job.company}. Please accept to proceed.`;
+              addNotification({
+                title: 'Stage Advancement Invitation',
+                message: msg,
+                type: 'both',
+                category: 'application',
+                actionLink: { label: 'Review Invitation', view: 'seeker-applications' }
+              });
+            } else {
+              setToast({ message: `Status updated to ${status.replace('-', ' ')}. Notifications transmitted.`, type: 'success' });
+              const msg = `Your application status for ${job.title} at ${job.company} has been updated to ${status.replace('-', ' ')}.`;
+              addNotification({
+                title: 'Application Update',
+                message: msg,
+                type: 'both',
+                category: 'application',
+                actionLink: { label: 'View Application', view: 'seeker-applications' }
+              });
+            }
+          }
+          return updated;
+        });
       }
+    } catch (err) {
+      setToast({ message: "Failed to update application status", type: 'error' });
+    }
+  }, [applications, jobs]);
 
-      const updated = prev.map(app => app.id === appId ? updatedApp : app);
-      const job = jobs.find(j => j.id === updatedApp.jobId);
+  const handleUpdateApplicationDueDate = useCallback(async (appId: string, dueDate: string) => {
+    try {
+      const response = await fetch(`/api/applications/${appId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dueDate })
+      });
       
-      if (job) {
-        if (needsAcceptance) {
-          setToast({ message: `Invitation to ${status.replace('-', ' ')} stage sent. Seeker must accept.`, type: 'info' });
-          const msg = `You have been invited to the ${status.replace('-', ' ')} stage for ${job.title} at ${job.company}. Please accept to proceed.`;
-          addNotification({
-            title: 'Stage Advancement Invitation',
-            message: msg,
-            type: 'both',
-            category: 'application',
-            actionLink: { label: 'Review Invitation', view: 'seeker-applications' }
-          });
-          console.log(`[NOTIFICATION] To: ${updatedApp.candidateProfile?.email}, Message: ${msg}`);
-          console.log(`[EMAIL] To: ${updatedApp.candidateProfile?.email}, Subject: Stage Advancement Invitation - CALIBERDESK, Body: Hello ${updatedApp.candidateProfile?.name}, you have been invited to move to the ${status.replace('-', ' ')} stage for ${job.title} at ${job.company}. Please log in to accept.`);
-        } else {
-          setToast({ message: `Status updated to ${status.replace('-', ' ')}. Notifications transmitted.`, type: 'success' });
-          const msg = `Your application status for ${job.title} at ${job.company} has been updated to ${status.replace('-', ' ')}.`;
-          addNotification({
-            title: 'Application Update',
-            message: msg,
-            type: 'both',
-            category: 'application',
-            actionLink: { label: 'View Application', view: 'seeker-applications' }
-          });
-          console.log(`[NOTIFICATION] To: ${updatedApp.candidateProfile?.email}, Message: ${msg}`);
-          console.log(`[EMAIL] To: ${updatedApp.candidateProfile?.email}, Subject: Application Update - CALIBERDESK, Body: Hello ${updatedApp.candidateProfile?.name}, your application status for the position of ${job.title} at ${job.company} is now: ${status.replace('-', ' ')}.`);
-        }
+      if (response.ok) {
+        setApplications(prev => prev.map(app => app.id === appId ? { ...app, dueDate } : app));
+        setToast({ message: "Task deadline synchronized.", type: 'success' });
       }
-      return updated;
-    });
-  }, [jobs]);
-
-  const handleUpdateApplicationDueDate = (appId: string, dueDate: string) => {
-    setApplications(prev => prev.map(app => app.id === appId ? { ...app, dueDate } : app));
-    setToast({ message: "Task deadline synchronized.", type: 'success' });
-  };
+    } catch (err) {
+      setToast({ message: "Failed to update due date", type: 'error' });
+    }
+  }, []);
 
   const handleAcceptStatusChange = (appId: string) => {
     setApplications(prev => {
@@ -1464,7 +1566,7 @@ const App: React.FC = () => {
         {view === 'payroll-landing' && <ComingSoonLanding module="payroll" onBack={() => setView('home')} />}
         {view === 'vendor-landing' && <ComingSoonLanding module="vendor" onBack={() => setView('home')} />}
 
-        {view === 'admin' && !isDetailActive && <AdminDashboard user={user} jobs={jobs} applications={applications} transactions={GLOBAL_TRANSACTIONS} onBack={() => setView('home')} pendingVerifications={pendingVerifications} onVerifyEmployer={handleVerifyEmployer} onApproveJob={() => {}} onUpdateApplicationStatus={handleUpdateApplicationStatus} onUpdateApplicationDueDate={handleUpdateApplicationDueDate} onUpdateJobStatus={handleUpdateJobStatus} onDeleteJob={handleDeleteJob} onPostJob={handlePostJob} onNavigateToBlog={() => setView('blog')} onSelectJob={handleSelectDetailedJob} />}
+        {view === 'admin' && !isDetailActive && <AdminDashboard user={user} jobs={jobs} applications={applications} transactions={GLOBAL_TRANSACTIONS} onBack={() => setView('home')} pendingVerifications={pendingVerifications} allUsers={allUsers} onVerifyEmployer={handleVerifyEmployer} onApproveJob={() => {}} onUpdateApplicationStatus={handleUpdateApplicationStatus} onUpdateApplicationDueDate={handleUpdateApplicationDueDate} onUpdateJobStatus={handleUpdateJobStatus} onDeleteJob={handleDeleteJob} onPostJob={handlePostJob} onNavigateToBlog={() => setView('blog')} onSelectJob={handleSelectDetailedJob} />}
         {view === 'admin-jobs' && !isDetailActive && (
           <JobManagement
             jobs={jobs}
@@ -1482,7 +1584,7 @@ const App: React.FC = () => {
             onNavigateToBlog={() => setView('blog')}
           />
         )}
-        {view === 'admin-staff' && !isDetailActive && <AdminDashboard user={user} jobs={jobs} applications={applications} transactions={GLOBAL_TRANSACTIONS} onBack={() => setView('home')} pendingVerifications={pendingVerifications} onVerifyEmployer={handleVerifyEmployer} onApproveJob={() => {}} onUpdateApplicationStatus={handleUpdateApplicationStatus} onUpdateApplicationDueDate={handleUpdateApplicationDueDate} onUpdateJobStatus={handleUpdateJobStatus} onDeleteJob={handleDeleteJob} onPostJob={handlePostJob} onNavigateToBlog={() => setView('blog')} onSelectJob={handleSelectDetailedJob} initialTab="staff" />}
+        {view === 'admin-staff' && !isDetailActive && <AdminDashboard user={user} jobs={jobs} applications={applications} transactions={GLOBAL_TRANSACTIONS} onBack={() => setView('home')} pendingVerifications={pendingVerifications} allUsers={allUsers} onVerifyEmployer={handleVerifyEmployer} onApproveJob={() => {}} onUpdateApplicationStatus={handleUpdateApplicationStatus} onUpdateApplicationDueDate={handleUpdateApplicationDueDate} onUpdateJobStatus={handleUpdateJobStatus} onDeleteJob={handleDeleteJob} onPostJob={handlePostJob} onNavigateToBlog={() => setView('blog')} onSelectJob={handleSelectDetailedJob} initialTab="staff" />}
         {view === 'profile' && !isDetailActive && (() => {
           const params = new URLSearchParams(window.location.search);
           const appId = params.get('appId');

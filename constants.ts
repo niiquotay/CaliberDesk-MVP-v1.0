@@ -1178,7 +1178,7 @@ export const MOCK_JOBS: Job[] = [
     requirements: '6+ years in product design. Expert level in Figma. Portfolio demonstrating complex SaaS workflows.',
     tags: ['Design', 'Remote', 'SaaS', 'UI/UX'],
     postedAt: generatePastDate(12),
-    expiryDate: new Date(now.getTime() + 35 * 24 * 60 * 60 * 1000).toISOString(),
+    expiryDate: new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000).toISOString(),
     isPremium: true,
     status: 'active',
     applicationType: 'in-app',

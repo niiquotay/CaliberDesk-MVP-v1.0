@@ -6,7 +6,7 @@ CaliberDesk is a next-generation social hiring platform designed to bridge the g
 ## 2. USER ROLES
 - **Job Seeker:** Individuals looking for career opportunities and professional growth.
 - **Employer (Organization):** Companies and recruiters looking to hire top talent efficiently.
-- **Staff (Admin):** Internal operators managing platform integrity, verifications, and support.
+- **Staff (Admin/Operator):** Internal operators managing platform integrity, verifications, and support. Roles include Super Admin, Sales Executive, Recruiter Head, and Finance Head.
 
 ## 3. USER FLOWS
 
@@ -33,7 +33,8 @@ CaliberDesk is a next-generation social hiring platform designed to bridge the g
 ### 3.2. Employer Journey
 1. **Organization Setup:**
    - Register the company and add initial sub-users (Admin, Recruiter, Viewer).
-   - Complete **Company Verification** by uploading official documents.
+   - **Verification Protocol:** Employers must verify via a corporate email domain or by uploading official business documents.
+   - **Grace Period:** Unverified accounts are deactivated after 3 days of inactivity/non-verification.
 2. **Talent Acquisition:**
    - Post job listings with detailed requirements and benefits.
    - Set up **Aptitude Tests** to filter candidates automatically.
@@ -49,10 +50,16 @@ CaliberDesk is a next-generation social hiring platform designed to bridge the g
 
 ### 3.3. Staff Journey
 1. **System Oversight:**
-   - Access the **Admin Dashboard** for a bird's-eye view of platform activity.
+   - Access the **Admin Dashboard** for a bird's-eye view of platform activity, including the **System Health Matrix** and **Global Activity Feed**.
 2. **Verification Handling:**
-   - Review and approve/reject company verification requests.
-3. **Content Management:**
+   - Review and approve/reject company verification requests in the **Verification Desk**.
+3. **User Management:**
+   - Manage the global user directory via **User Identity Management**.
+   - Provision internal staff access with specific operational roles (Sales, Recruiter, Finance).
+4. **Support & Operations:**
+   - Manage support requests via the **Service Desk Tickets** system.
+   - Audit job listings in the **Job Oversight Desk**.
+5. **Content Management:**
    - Publish industry insights and reports via the **Editorial Blog**.
 
 ## 4. NAVIGATION
@@ -60,5 +67,6 @@ The platform uses a modular layout with a sidebar for quick access to:
 - **Feed/Dashboard:** Primary workspace.
 - **AI Tools:** Suite of professional assistants.
 - **Management:** Jobs, Applications, or Team settings.
+- **Staff:** (Admin Only) Verification, Oversight, and User Management.
 - **Insights:** Analytics and Blog.
 - **Settings:** Profile and Billing management.

@@ -62,7 +62,91 @@ alter table users enable row level security;
 create policy "Allow all for anon" on users for all using (true) with check (true);
 ```
 
-## 2. Environment Variables
+## 2. Create Jobs, Blog, and Applications Tables
+Run the following SQL to set up the rest of the database:
+
+```sql
+-- Jobs Table
+create table jobs (
+  id uuid default uuid_generate_v4() primary key,
+  "idNumber" text unique,
+  title text not null,
+  company text not null,
+  city text,
+  country text,
+  location text, -- Hybrid, Remote, Onsite
+  category text,
+  "allowedCountries" text[],
+  salary text,
+  description text,
+  responsibilities text,
+  requirements text,
+  tags text[],
+  benefits text[],
+  "postedAt" timestamp with time zone default now(),
+  "expiryDate" timestamp with time zone,
+  "isPremium" boolean default false,
+  "isQuickHire" boolean default false,
+  status text default 'active',
+  "applicationType" text default 'in-app',
+  industry text,
+  "postedBy" uuid references users(id),
+  "aptitudeTestId" text
+);
+
+-- Blog Posts Table
+create table blog_posts (
+  id uuid default uuid_generate_v4() primary key,
+  title text not null,
+  content text not null,
+  author text not null,
+  "authorRole" text,
+  "publishedAt" timestamp with time zone default now(),
+  "imageUrl" text,
+  "videoUrl" text,
+  tags text[],
+  "readTime" text,
+  "isDraft" boolean default false
+);
+
+-- Applications Table
+create table applications (
+  id uuid default uuid_generate_v4() primary key,
+  "jobId" uuid references jobs(id),
+  "userId" uuid references users(id),
+  status text default 'applied',
+  "appliedDate" timestamp with time zone default now(),
+  "matchScore" integer,
+  "matchReason" text,
+  "isAutoApplied" boolean default false,
+  "statusHistory" jsonb default '[]'
+);
+
+-- Aptitude Tests Table
+create table aptitude_tests (
+  id uuid default uuid_generate_v4() primary key,
+  "jobId" uuid references jobs(id),
+  title text not null,
+  questions jsonb not null, -- Array of questions
+  "timeLimit" integer,
+  "createdAt" timestamp with time zone default now(),
+  difficulty text
+);
+
+-- Enable RLS for new tables
+alter table jobs enable row level security;
+alter table blog_posts enable row level security;
+alter table applications enable row level security;
+alter table aptitude_tests enable row level security;
+
+-- Simple policies for MVP (Allow all for anon)
+create policy "Allow all for anon" on jobs for all using (true) with check (true);
+create policy "Allow all for anon" on blog_posts for all using (true) with check (true);
+create policy "Allow all for anon" on applications for all using (true) with check (true);
+create policy "Allow all for anon" on aptitude_tests for all using (true) with check (true);
+```
+
+## 3. Environment Variables
 Ensure your `.env` file has the following (already added to `.env.example`):
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_ANON_KEY`
