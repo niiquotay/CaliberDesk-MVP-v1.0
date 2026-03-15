@@ -9,10 +9,16 @@ import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
 import { OAuth2Client } from "google-auth-library";
+import { createClient } from "@supabase/supabase-js";
 import { MOCK_USER, MOCK_EMPLOYER, STAFF_ACCOUNTS } from "./constants";
 import { UserProfile } from "./types";
 
 dotenv.config();
+
+const supabaseUrl = process.env.VITE_SUPABASE_URL || "";
+const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || "";
+
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 async function startServer() {
   const app = express();
@@ -38,24 +44,18 @@ async function startServer() {
     return `${prefix}-${random}`;
   };
 
-  // In-memory user store
-  const users: UserProfile[] = [
-    { ...MOCK_USER, idNumber: generateIdNumber('SKR'), password: "user123", joinedDate: new Date().toISOString() },
-    { ...MOCK_EMPLOYER, idNumber: generateIdNumber('CMP'), password: "employer123", joinedDate: new Date().toISOString() },
-    ...Object.values(STAFF_ACCOUNTS).map(s => ({ 
-      ...s, 
-      idNumber: generateIdNumber('USR'), 
-      password: s.opRole === 'super_admin' ? "admin123" : "staff123",
-      joinedDate: new Date().toISOString()
-    }))
-  ];
-
   // Helper to send in-app notifications to staff
-  const notifyStaff = (title: string, message: string, actionLink?: any) => {
-    const staff = users.filter(u => u.isAdmin || u.opRole);
-    staff.forEach(s => {
-      if (!s.notifications) s.notifications = [];
-      s.notifications.unshift({
+  const notifyStaff = async (title: string, message: string, actionLink?: any) => {
+    const { data: staff, error } = await supabase
+      .from('users')
+      .select('*')
+      .or('isAdmin.eq.true,opRole.neq.null');
+    
+    if (error || !staff) return;
+
+    for (const s of staff) {
+      const notifications = s.notifications || [];
+      notifications.unshift({
         id: Math.random().toString(36).substr(2, 9),
         title,
         message,
@@ -65,28 +65,54 @@ async function startServer() {
         isRead: false,
         actionLink
       });
-    });
+      await supabase.from('users').update({ notifications }).eq('id', s.id);
+    }
   };
 
   // Helper to check and deactivate unverified accounts
-  const checkDeactivations = () => {
+  const checkDeactivations = async () => {
     const now = new Date();
-    users.forEach(u => {
+    const { data: users, error } = await supabase.from('users').select('*');
+    if (error || !users) return;
+
+    for (const u of users) {
       if (u.isEmployer && !u.isVerified && !u.isDeactivated && u.joinedDate) {
         const joined = new Date(u.joinedDate);
         const diffDays = Math.ceil((now.getTime() - joined.getTime()) / (1000 * 60 * 60 * 24));
         if (diffDays > 35) {
-          u.isDeactivated = true;
-          u.deactivationDate = now.toISOString();
+          await supabase.from('users').update({ isDeactivated: true, deactivationDate: now.toISOString() }).eq('id', u.id);
           console.log(`[SYSTEM] Deactivated unverified employer account: ${u.email}`);
         }
       }
-    });
+    }
   };
 
   // Run deactivation check every hour (simulated)
   setInterval(checkDeactivations, 60 * 60 * 1000);
   checkDeactivations(); // Initial check
+
+  // Seed mock users if database is empty
+  const seedMockUsers = async () => {
+    const { count } = await supabase.from('users').select('*', { count: 'exact', head: true });
+    if (count === 0) {
+      console.log("[SYSTEM] Seeding mock users to Supabase...");
+      const mockUsers = [
+        { ...MOCK_USER, idNumber: generateIdNumber('SKR'), password: "user123", joinedDate: new Date().toISOString(), isVerified: true },
+        { ...MOCK_EMPLOYER, idNumber: generateIdNumber('CMP'), password: "employer123", joinedDate: new Date().toISOString(), isVerified: false },
+        ...Object.values(STAFF_ACCOUNTS).map(s => ({ 
+          ...s, 
+          idNumber: generateIdNumber('USR'), 
+          password: s.opRole === 'super_admin' ? "admin123" : "staff123",
+          joinedDate: new Date().toISOString(),
+          isAdmin: true
+        }))
+      ];
+      const { error } = await supabase.from('users').insert(mockUsers);
+      if (error) console.error("[SYSTEM] Seeding error:", error);
+      else console.log("[SYSTEM] Mock users seeded successfully.");
+    }
+  };
+  seedMockUsers();
 
   // In-memory verification codes
   const verificationCodes: Record<string, { code: string; expires: number }> = {};
@@ -147,12 +173,10 @@ async function startServer() {
       const { firstName, middleName, lastName, email, password, isEmployer, phone, country, companyName, subUsers, verificationCode } = req.body;
       const name = `${firstName} ${middleName ? middleName + ' ' : ''}${lastName}`;
       
-      // Staff domain restriction for general sign-up
       if (email.toLowerCase().endsWith('@caliberdesk.com')) {
         return res.status(400).json({ message: "Staff accounts cannot be created directly. Please contact an administrator." });
       }
 
-      // Seeker Email Verification Check
       if (!isEmployer) {
         if (!verificationCode) {
           return res.status(400).json({ message: "Verification code is required for seeker registration." });
@@ -164,55 +188,44 @@ async function startServer() {
         delete verificationCodes[email];
       }
 
-      // Check for duplicate account with SAME role
-      if (users.find(u => u.email.toLowerCase() === email.toLowerCase() && !!u.isEmployer === !!isEmployer)) {
+      // Check for duplicate account with SAME role in Supabase
+      const { data: existingUser } = await supabase
+        .from('users')
+        .select('id')
+        .eq('email', email.toLowerCase())
+        .eq('isEmployer', !!isEmployer)
+        .single();
+
+      if (existingUser) {
         return res.status(400).json({ message: `A ${isEmployer ? 'company' : 'seeker'} account already exists with this email.` });
       }
-
-      // Employer Email Validation (Relaxed for Document Verification)
-      const freeEmailDomains = [
-        'gmail.com', 'yahoo.com', 'outlook.com', 'hotmail.com', 
-        'icloud.com', 'aol.com', 'protonmail.com', 'zoho.com', 
-        'mail.com', 'gmx.com', 'yandex.com'
-      ];
-      const domain = email.split('@')[1]?.toLowerCase();
-      const isPublicEmail = freeEmailDomains.includes(domain);
 
       if (isEmployer) {
         if (!companyName) {
           return res.status(400).json({ message: "Company name is required for employer accounts." });
         }
-        
-        // Requirement: Employer must add users before account is created
         if (!subUsers || subUsers.length === 0) {
           return res.status(400).json({ message: "Employers are required to add at least one user before the account can be created." });
         }
       }
 
       const hashedPassword = await hashPassword(password);
-      const newUser: UserProfile = {
+      const newUser = {
         name,
         firstName,
         middleName,
         lastName,
-        email,
+        email: email.toLowerCase(),
         password: hashedPassword,
         phoneNumbers: [phone],
         isEmployer: !!isEmployer,
-        isVerified: !isEmployer, // Seekers are verified via code during registration, employers are not
+        isVerified: !isEmployer,
         joinedDate: new Date().toISOString(),
-        companyName: isEmployer ? companyName : undefined,
-        isSuperUser: !!isEmployer, // Primary employer user is super user
+        companyName: isEmployer ? companyName : null,
+        isSuperUser: !!isEmployer,
         idNumber: generateIdNumber(isEmployer ? 'CMP' : 'SKR'),
         role: isEmployer ? "Employer" : "Seeker",
-        city: "",
         country: country || "",
-        skills: [],
-        digitalSkills: [],
-        certifications: [],
-        hobbies: [],
-        projects: [],
-        experienceSummary: "",
         profileCompleted: false,
         linkedInConnected: false,
         isSubscribed: false,
@@ -227,24 +240,28 @@ async function startServer() {
         education: [],
         stealthMode: false,
         notifications: [],
-        subUsers: isEmployer ? (subUsers || []).map((u: any) => {
-          const subUser = {
-            ...u,
-            id: Math.random().toString(36).substr(2, 9),
-            name: `${u.firstName} ${u.middleName ? u.middleName + ' ' : ''}${u.lastName}`,
-            idNumber: generateIdNumber('USR'),
-            joinedDate: new Date().toISOString(),
-            lastLogin: 'Never'
-          };
-          console.log(`[INVITATION EMAIL] To: ${u.email}, Message: Hello ${u.firstName}, you have been invited to join ${companyName} on CaliberDesk.`);
-          return subUser;
-        }) : []
+        subUsers: isEmployer ? (subUsers || []).map((u: any) => ({
+          ...u,
+          id: Math.random().toString(36).substr(2, 9),
+          name: `${u.firstName} ${u.middleName ? u.middleName + ' ' : ''}${u.lastName}`,
+          idNumber: generateIdNumber('USR'),
+          joinedDate: new Date().toISOString(),
+          lastLogin: 'Never'
+        })) : []
       };
 
+      const { data: insertedUser, error: insertError } = await supabase
+        .from('users')
+        .insert([newUser])
+        .select()
+        .single();
+
+      if (insertError) {
+        console.error("Supabase insert error:", insertError);
+        return res.status(500).json({ message: "Failed to create user account." });
+      }
+
       if (isEmployer) {
-        console.log(`[EMAIL] To: ${email}, Subject: Welcome to CaliberDesk! Please verify your company account.`);
-        console.log(`[EMAIL] Content: Hi ${name}, welcome to CaliberDesk. To unlock full job posting capabilities (28-day listings, unlimited posts), please complete your company verification. Benefits include increased visibility, trusted status, and access to premium candidate matching.`);
-        
         notifyStaff(
           "New Employer Sign Up",
           `A new employer ${companyName} (${email}) has signed up and requires verification.`,
@@ -252,12 +269,10 @@ async function startServer() {
         );
       }
 
-      users.push(newUser);
-      
-      const token = jwt.sign({ email: newUser.email, isEmployer: newUser.isEmployer, isAdmin: newUser.isAdmin }, JWT_SECRET, { expiresIn: "24h" });
+      const token = jwt.sign({ email: insertedUser.email, isEmployer: insertedUser.isEmployer, isAdmin: insertedUser.isAdmin }, JWT_SECRET, { expiresIn: "24h" });
       res.cookie("token", token, { httpOnly: true, secure: true, sameSite: "none" });
       
-      const { password: _, ...userWithoutPassword } = newUser;
+      const { password: _, ...userWithoutPassword } = insertedUser;
       res.json(userWithoutPassword);
     } catch (error) {
       console.error("Registration error:", error);
@@ -269,64 +284,102 @@ async function startServer() {
     try {
       const { email, password, isEmployer } = req.body;
       
-      // Find user by email AND role
-      const user = users.find(u => 
-        u.email.toLowerCase() === email.toLowerCase() && 
-        (u.isAdmin || isEmployer === undefined || !!u.isEmployer === !!isEmployer)
-      );
-
-      if (!user) {
-        return res.status(401).json({ message: "Invalid credentials or account type" });
+      // Find user by email AND role in Supabase
+      let query = supabase
+        .from('users')
+        .select('*')
+        .eq('email', email.toLowerCase());
+      
+      if (isEmployer !== undefined) {
+        query = query.eq('isEmployer', !!isEmployer);
       }
 
-      // If it's a staff email, ensure they are authorized staff (isAdmin)
-      if (email.toLowerCase().endsWith('@caliberdesk.com') && !user.isAdmin) {
-        return res.status(401).json({ message: "Unauthorized staff access. Please contact an administrator." });
+      const { data: user, error } = await query.single();
+
+      if (error || !user) {
+        // Fallback for staff who might not have isEmployer set strictly
+        const { data: staffUser } = await supabase
+          .from('users')
+          .select('*')
+          .eq('email', email.toLowerCase())
+          .eq('isAdmin', true)
+          .single();
+        
+        if (!staffUser) {
+          return res.status(401).json({ message: "Invalid credentials or account type" });
+        }
+        return handleLogin(staffUser, password, res);
       }
 
-      // For mock users, we might have plain text passwords or hashed ones
-      const isMatch = user.password === password || (user.password && await bcrypt.compare(password, user.password));
-
-      if (!isMatch) {
-        return res.status(401).json({ message: "Invalid credentials" });
-      }
-
-      if (user.isDeactivated) {
-        return res.status(403).json({ 
-          message: "Your account has been deactivated due to incomplete verification within 35 days. Please contact support@caliberdesk.com to reactivate." 
-        });
-      }
-
-      const token = jwt.sign({ email: user.email, isEmployer: user.isEmployer, isAdmin: user.isAdmin }, JWT_SECRET, { expiresIn: "24h" });
-      res.cookie("token", token, { httpOnly: true, secure: true, sameSite: "none" });
-
-      const { password: _, ...userWithoutPassword } = user;
-      res.json(userWithoutPassword);
+      return handleLogin(user, password, res);
     } catch (error) {
       console.error("Login error:", error);
       res.status(500).json({ message: "Internal server error during login" });
     }
   });
 
-  app.get("/api/auth/me", authenticateToken, (req: any, res) => {
-    const user = users.find(u => u.email === req.user.email && !!u.isEmployer === !!req.user.isEmployer);
-    if (!user) return res.status(404).json({ message: "User not found" });
+  const handleLogin = async (user: any, password: any, res: any) => {
+    if (user.email.toLowerCase().endsWith('@caliberdesk.com') && !user.isAdmin) {
+      return res.status(401).json({ message: "Unauthorized staff access. Please contact an administrator." });
+    }
+
+    const isMatch = user.password === password || (user.password && await bcrypt.compare(password, user.password));
+
+    if (!isMatch) {
+      return res.status(401).json({ message: "Invalid credentials" });
+    }
+
+    if (user.isDeactivated) {
+      return res.status(403).json({ 
+        message: "Your account has been deactivated due to incomplete verification within 35 days. Please contact support@caliberdesk.com to reactivate." 
+      });
+    }
+
+    const token = jwt.sign({ email: user.email, isEmployer: user.isEmployer, isAdmin: user.isAdmin }, JWT_SECRET, { expiresIn: "24h" });
+    res.cookie("token", token, { httpOnly: true, secure: true, sameSite: "none" });
+
+    const { password: _, ...userWithoutPassword } = user;
+    res.json(userWithoutPassword);
+  };
+
+  app.get("/api/auth/me", authenticateToken, async (req: any, res) => {
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('email', req.user.email)
+      .eq('isEmployer', !!req.user.isEmployer)
+      .single();
+
+    if (error || !user) return res.status(404).json({ message: "User not found" });
 
     const { password: _, ...userWithoutPassword } = user;
     res.json(userWithoutPassword);
   });
 
   // Admin Verification Routes
-  app.get("/api/admin/pending-verifications", authenticateToken, (req: any, res) => {
+  app.get("/api/admin/pending-verifications", authenticateToken, async (req: any, res) => {
     if (!req.user.isAdmin && !req.user.opRole) return res.status(403).json({ message: "Forbidden" });
-    const pending = users.filter(u => u.isEmployer && !u.isVerified && !u.isDeactivated);
+    
+    const { data: pending, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('isEmployer', true)
+      .eq('isVerified', false)
+      .eq('isDeactivated', false);
+
+    if (error) return res.status(500).json({ message: "Failed to fetch pending verifications" });
     res.json(pending.map(({ password, ...u }) => u));
   });
 
-  app.post("/api/employer/verify-email-request", authenticateToken, (req: any, res) => {
+  app.post("/api/employer/verify-email-request", authenticateToken, async (req: any, res) => {
     const { email } = req.body;
-    const user = users.find(u => u.email === req.user.email);
-    if (!user) return res.status(404).json({ message: "User not found" });
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('email', req.user.email)
+      .single();
+
+    if (error || !user) return res.status(404).json({ message: "User not found" });
 
     const freeEmailDomains = [
       'gmail.com', 'yahoo.com', 'outlook.com', 'hotmail.com', 
@@ -344,15 +397,20 @@ async function startServer() {
       expires: Date.now() + 10 * 60 * 1000
     };
 
-    user.verificationEmail = email;
+    await supabase.from('users').update({ verificationEmail: email }).eq('id', user.id);
     console.log(`[VERIFICATION] Code for ${email}: ${code}`);
     res.json({ message: "Verification code sent to corporate email." });
   });
 
-  app.post("/api/employer/verify-email-submit", authenticateToken, (req: any, res) => {
+  app.post("/api/employer/verify-email-submit", authenticateToken, async (req: any, res) => {
     const { code } = req.body;
-    const user = users.find(u => u.email === req.user.email);
-    if (!user) return res.status(404).json({ message: "User not found" });
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('email', req.user.email)
+      .single();
+
+    if (error || !user) return res.status(404).json({ message: "User not found" });
 
     const identifier = user.verificationEmail;
     if (!identifier) return res.status(400).json({ message: "No verification request found." });
@@ -362,20 +420,23 @@ async function startServer() {
       return res.status(400).json({ message: "Invalid or expired code." });
     }
 
-    user.isVerified = true;
-    user.verificationMethod = 'email';
+    await supabase.from('users').update({ isVerified: true, verificationMethod: 'email' }).eq('id', user.id);
     delete verificationCodes[identifier];
 
-    res.json({ message: "Company verified successfully via email.", user });
+    res.json({ message: "Company verified successfully via email.", user: { ...user, isVerified: true, verificationMethod: 'email' } });
   });
 
-  app.post("/api/employer/upload-documents", authenticateToken, (req: any, res) => {
-    const { documents } = req.body; // Array of base64 or URLs
-    const user = users.find(u => u.email === req.user.email);
-    if (!user) return res.status(404).json({ message: "User not found" });
+  app.post("/api/employer/upload-documents", authenticateToken, async (req: any, res) => {
+    const { documents } = req.body;
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('email', req.user.email)
+      .single();
 
-    user.verificationDocuments = documents;
-    user.verificationMethod = 'document';
+    if (error || !user) return res.status(404).json({ message: "User not found" });
+
+    await supabase.from('users').update({ verificationDocuments: documents, verificationMethod: 'document' }).eq('id', user.id);
 
     notifyStaff(
       "Document Verification Request",
@@ -383,19 +444,23 @@ async function startServer() {
       { view: 'admin', params: { tab: 'verifications', userId: user.id || user.idNumber } }
     );
 
-    res.json({ message: "Documents uploaded successfully. An admin will review them shortly.", user });
+    res.json({ message: "Documents uploaded successfully. An admin will review them shortly.", user: { ...user, verificationDocuments: documents, verificationMethod: 'document' } });
   });
 
-  app.post("/api/admin/verify-employer", authenticateToken, (req: any, res) => {
+  app.post("/api/admin/verify-employer", authenticateToken, async (req: any, res) => {
     if (!req.user.isAdmin) return res.status(403).json({ message: "Forbidden" });
     
     const { userId } = req.body;
-    const userIndex = users.findIndex(u => u.idNumber === userId || u.id === userId);
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('*')
+      .or(`idNumber.eq.${userId},id.eq.${userId}`)
+      .single();
     
-    if (userIndex === -1) return res.status(404).json({ message: "Employer not found" });
+    if (error || !user) return res.status(404).json({ message: "Employer not found" });
     
-    users[userIndex].isVerified = true;
-    res.json({ message: "Employer verified successfully", user: users[userIndex] });
+    await supabase.from('users').update({ isVerified: true }).eq('id', user.id);
+    res.json({ message: "Employer verified successfully", user: { ...user, isVerified: true } });
   });
 
   app.post("/api/auth/logout", (req, res) => {
@@ -441,7 +506,13 @@ async function startServer() {
       });
 
       const { name, email, picture, given_name, family_name } = userInfoResponse.data;
-      let user = users.find(u => u.email.toLowerCase() === email.toLowerCase() && !!u.isEmployer === !!isEmployer);
+      
+      let { data: user } = await supabase
+        .from('users')
+        .select('*')
+        .eq('email', email.toLowerCase())
+        .eq('isEmployer', !!isEmployer)
+        .single();
 
       if (!user) {
         if (isEmployer) {
@@ -469,24 +540,18 @@ async function startServer() {
           }
         }
 
-        user = {
+        const newUser = {
           name,
           firstName: given_name || name.split(' ')[0],
           middleName: "",
           lastName: family_name || name.split(' ').slice(1).join(' '),
-          email,
+          email: email.toLowerCase(),
           isEmployer: !!isEmployer,
-          isVerified: !isEmployer, // Seekers from OAuth are verified, employers are not
-          isSuperUser: !!isEmployer, // Primary employer is super user
+          isVerified: !isEmployer,
+          isSuperUser: !!isEmployer,
           role: isEmployer ? "Employer" : "Seeker",
           city: "",
           country: "",
-          skills: [],
-          digitalSkills: [],
-          certifications: [],
-          hobbies: [],
-          projects: [],
-          experienceSummary: "",
           profileCompleted: false,
           linkedInConnected: false,
           isSubscribed: false,
@@ -501,9 +566,19 @@ async function startServer() {
           education: [],
           stealthMode: false,
           phoneNumbers: [],
-          subUsers: []
+          subUsers: [],
+          joinedDate: new Date().toISOString(),
+          idNumber: generateIdNumber(isEmployer ? 'CMP' : 'SKR')
         };
-        users.push(user);
+        
+        const { data: inserted, error: insertError } = await supabase
+          .from('users')
+          .insert([newUser])
+          .select()
+          .single();
+        
+        if (insertError) throw insertError;
+        user = inserted;
       }
 
       const token = jwt.sign({ email: user.email, isEmployer: user.isEmployer, isAdmin: user.isAdmin }, JWT_SECRET, { expiresIn: "24h" });
@@ -577,7 +652,12 @@ async function startServer() {
       const name = `${firstName} ${lastName}`;
       const email = emailResponse.data.elements[0]["handle~"].emailAddress;
 
-      let user = users.find(u => u.email.toLowerCase() === email.toLowerCase() && !!u.isEmployer === !!isEmployer);
+      let { data: user } = await supabase
+        .from('users')
+        .select('*')
+        .eq('email', email.toLowerCase())
+        .eq('isEmployer', !!isEmployer)
+        .single();
 
       if (!user) {
         if (isEmployer) {
@@ -605,24 +685,18 @@ async function startServer() {
           }
         }
 
-        user = {
+        const newUser = {
           name,
           firstName,
           middleName: "",
           lastName,
-          email,
+          email: email.toLowerCase(),
           isEmployer: !!isEmployer,
-          isVerified: !isEmployer, // Seekers from OAuth are verified, employers are not
-          isSuperUser: !!isEmployer, // Primary employer is super user
+          isVerified: !isEmployer,
+          isSuperUser: !!isEmployer,
           role: isEmployer ? "Employer" : "Seeker",
           city: "",
           country: "",
-          skills: [],
-          digitalSkills: [],
-          certifications: [],
-          hobbies: [],
-          projects: [],
-          experienceSummary: "",
           profileCompleted: false,
           linkedInConnected: true,
           isSubscribed: false,
@@ -637,9 +711,19 @@ async function startServer() {
           education: [],
           stealthMode: false,
           phoneNumbers: [],
-          subUsers: []
+          subUsers: [],
+          joinedDate: new Date().toISOString(),
+          idNumber: generateIdNumber(isEmployer ? 'CMP' : 'SKR')
         };
-        users.push(user);
+        
+        const { data: inserted, error: insertError } = await supabase
+          .from('users')
+          .insert([newUser])
+          .select()
+          .single();
+        
+        if (insertError) throw insertError;
+        user = inserted;
       }
 
       const token = jwt.sign({ email: user.email, isEmployer: user.isEmployer, isAdmin: user.isAdmin }, JWT_SECRET, { expiresIn: "24h" });
