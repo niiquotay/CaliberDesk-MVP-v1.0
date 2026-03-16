@@ -1,4 +1,6 @@
 import express from "express";
+import cors from "cors";
+import rateLimit from "express-rate-limit";
 import { createServer as createViteServer } from "vite";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
@@ -25,7 +27,6 @@ if (!supabaseUrl || !supabaseAnonKey) {
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 async function startServer() {
-  console.log("Initializing server...");
   const app = express();
   const PORT = 3000;
   const JWT_SECRET = process.env.JWT_SECRET || "fallback_secret";
@@ -40,11 +41,27 @@ async function startServer() {
     return `${origin}${path}`;
   };
 
+  const allowedOrigins = [
+    process.env.APP_URL,
+    process.env.SHARED_APP_URL,
+    'https://your-production-domain.com'
+  ].filter(Boolean);
+
+  app.use(cors({
+    origin: function (origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
+    credentials: true
+  }));
+
   app.use(express.json());
   app.use(cookieParser());
 
   app.get("/api/health", (req, res) => {
-    console.log("Health check requested");
     res.json({ status: "ok", timestamp: new Date().toISOString() });
   });
 
@@ -91,7 +108,6 @@ async function startServer() {
         const diffDays = Math.ceil((now.getTime() - joined.getTime()) / (1000 * 60 * 60 * 24));
         if (diffDays > 3) {
           await supabase.from('users').update({ isDeactivated: true, deactivationDate: now.toISOString() }).eq('id', u.id);
-          console.log(`[SYSTEM] Deactivated unverified employer account: ${u.email}`);
         }
       }
     }
@@ -103,9 +119,19 @@ async function startServer() {
 
   // Seed mock users if database is empty
   const seedMockUsers = async () => {
-    const { count: userCount } = await supabase.from('users').select('*', { count: 'exact', head: true });
+    const { count: userCount, error: userError } = await supabase.from('users').select('*', { count: 'exact', head: true });
+    
+    if (userError) {
+      if (userError.code === '42P01') {
+        console.error("\n[CRITICAL] Supabase 'users' table not found.");
+        console.error("[CRITICAL] Please follow the instructions in SUPABASE_SETUP.md to create the required tables.\n");
+        return;
+      }
+      console.error("[SYSTEM] Error checking users table:", userError);
+      return;
+    }
+
     if (userCount === 0) {
-      console.log("[SYSTEM] Seeding mock users to Supabase...");
       const mockUsers = [
         { ...MOCK_USER, idNumber: generateIdNumber('SKR'), password: "user123", joinedDate: new Date().toISOString(), isVerified: true },
         { ...MOCK_EMPLOYER, idNumber: generateIdNumber('CMP'), password: "employer123", joinedDate: new Date().toISOString(), isVerified: false },
@@ -119,12 +145,10 @@ async function startServer() {
       ];
       const { error } = await supabase.from('users').insert(mockUsers);
       if (error) console.error("[SYSTEM] Seeding users error:", error);
-      else console.log("[SYSTEM] Mock users seeded successfully.");
     }
 
     const { count: jobCount } = await supabase.from('jobs').select('*', { count: 'exact', head: true });
     if (jobCount === 0) {
-      console.log("[SYSTEM] Seeding mock jobs to Supabase...");
       const { data: users } = await supabase.from('users').select('id, companyName').eq('isEmployer', true);
       const employerId = users?.[0]?.id;
 
@@ -135,24 +159,20 @@ async function startServer() {
       }));
       const { error } = await supabase.from('jobs').insert(mockJobs);
       if (error) console.error("[SYSTEM] Seeding jobs error:", error);
-      else console.log("[SYSTEM] Mock jobs seeded successfully.");
     }
 
     const { count: blogCount } = await supabase.from('blog_posts').select('*', { count: 'exact', head: true });
     if (blogCount === 0) {
-      console.log("[SYSTEM] Seeding mock blog posts to Supabase...");
       const mockPosts = MOCK_BLOG_POSTS.map(p => ({
         ...p,
         publishedAt: new Date().toISOString()
       }));
       const { error } = await supabase.from('blog_posts').insert(mockPosts);
       if (error) console.error("[SYSTEM] Seeding blog posts error:", error);
-      else console.log("[SYSTEM] Mock blog posts seeded successfully.");
     }
 
     const { count: testCount } = await supabase.from('aptitude_tests').select('*', { count: 'exact', head: true });
     if (testCount === 0) {
-      console.log("[SYSTEM] Seeding mock aptitude tests to Supabase...");
       const { data: jobs } = await supabase.from('jobs').select('id, idNumber');
       const mockTests = MOCK_APTITUDE_TESTS.map(t => {
         const job = jobs?.find(j => j.idNumber === t.jobId);
@@ -164,7 +184,6 @@ async function startServer() {
       });
       const { error } = await supabase.from('aptitude_tests').insert(mockTests);
       if (error) console.error("[SYSTEM] Seeding tests error:", error);
-      else console.log("[SYSTEM] Mock aptitude tests seeded successfully.");
     }
   };
   seedMockUsers();
@@ -189,7 +208,34 @@ async function startServer() {
     });
   };
 
+  const requireAdmin = (req: any, res: any, next: any) => {
+    if (!req.user || (!req.user.isAdmin && req.user.role !== 'admin' && !req.user.opRole)) {
+      return res.status(403).json({ message: "Forbidden: Admin access required" });
+    }
+    next();
+  };
+
   // API Routes
+  const passwordResetLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000, // 1 hour
+    max: 3, // Limit each IP to 3 requests per `window` (here, per hour)
+    message: { message: "Too many password reset requests, please try again after an hour" },
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: (req) => req.body.email || req.ip
+  });
+
+  app.post("/api/auth/reset-password", passwordResetLimiter, async (req, res, next) => {
+    try {
+      const { email } = req.body;
+      if (!email) return res.status(400).json({ message: "Email is required" });
+      // Mock password reset logic
+      res.json({ message: "Password reset link sent if email exists." });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   app.post("/api/auth/send-verification", async (req, res) => {
     const { email, phone } = req.body;
     const identifier = email || phone;
@@ -204,8 +250,6 @@ async function startServer() {
       expires: Date.now() + 10 * 60 * 1000 // 10 minutes
     };
 
-    console.log(`[VERIFICATION] Code for ${identifier}: ${code}`);
-    
     // In a real app, send via SMS/Email here
     res.json({ message: "Verification code sent successfully" });
   });
@@ -313,7 +357,7 @@ async function startServer() {
 
       if (insertError) {
         console.error("Supabase insert error:", insertError);
-        return res.status(500).json({ message: "Failed to create user account." });
+        return res.status(500).json({ message: "An unexpected error occurred. Please try again later." });
       }
 
       if (isEmployer) {
@@ -324,14 +368,14 @@ async function startServer() {
         );
       }
 
-      const token = jwt.sign({ email: insertedUser.email, isEmployer: insertedUser.isEmployer, isAdmin: insertedUser.isAdmin }, JWT_SECRET, { expiresIn: "24h" });
+      const token = jwt.sign({ email: insertedUser.email, isEmployer: insertedUser.isEmployer, isAdmin: insertedUser.isAdmin, role: insertedUser.role }, JWT_SECRET, { expiresIn: "24h" });
       res.cookie("token", token, { httpOnly: true, secure: true, sameSite: "none" });
       
       const { password: _, ...userWithoutPassword } = insertedUser;
       res.json(userWithoutPassword);
     } catch (error) {
       console.error("Registration error:", error);
-      res.status(500).json({ message: "Internal server error during registration" });
+      res.status(500).json({ message: "An unexpected error occurred. Please try again later." });
     }
   });
 
@@ -369,7 +413,7 @@ async function startServer() {
       return handleLogin(user, password, res);
     } catch (error) {
       console.error("Login error:", error);
-      res.status(500).json({ message: "Internal server error during login" });
+      res.status(500).json({ message: "An unexpected error occurred. Please try again later." });
     }
   });
 
@@ -390,7 +434,7 @@ async function startServer() {
       });
     }
 
-    const token = jwt.sign({ email: user.email, isEmployer: user.isEmployer, isAdmin: user.isAdmin }, JWT_SECRET, { expiresIn: "24h" });
+    const token = jwt.sign({ email: user.email, isEmployer: user.isEmployer, isAdmin: user.isAdmin, role: user.role }, JWT_SECRET, { expiresIn: "24h" });
     res.cookie("token", token, { httpOnly: true, secure: true, sameSite: "none" });
 
     const { password: _, ...userWithoutPassword } = user;
@@ -412,29 +456,39 @@ async function startServer() {
   });
 
   // Admin Verification Routes
-  app.get("/api/admin/pending-verifications", authenticateToken, async (req: any, res) => {
-    if (!req.user.isAdmin && !req.user.opRole) return res.status(403).json({ message: "Forbidden" });
-    
-    const { data: pending, error } = await supabase
-      .from('users')
-      .select('*')
-      .eq('isEmployer', true)
-      .eq('isVerified', false)
-      .eq('isDeactivated', false);
+  app.get("/api/admin/pending-verifications", authenticateToken, requireAdmin, async (req: any, res, next) => {
+    try {
+      const { data: pending, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('isEmployer', true)
+        .eq('isVerified', false)
+        .eq('isDeactivated', false);
 
-    if (error) return res.status(500).json({ message: "Failed to fetch pending verifications" });
-    res.json(pending.map(({ password, ...u }) => u));
+      if (error) {
+        if (error.code === '42P01') return res.json([]);
+        throw error;
+      }
+      res.json(pending.map(({ password, ...u }) => u));
+    } catch (error) {
+      next(error);
+    }
   });
 
-  app.get("/api/admin/users", authenticateToken, async (req: any, res) => {
-    if (!req.user.isAdmin && !req.user.opRole) return res.status(403).json({ message: "Forbidden" });
-    
-    const { data: users, error } = await supabase
-      .from('users')
-      .select('*');
+  app.get("/api/admin/users", authenticateToken, requireAdmin, async (req: any, res, next) => {
+    try {
+      const { data: users, error } = await supabase
+        .from('users')
+        .select('*');
 
-    if (error) return res.status(500).json({ message: "Failed to fetch users" });
-    res.json(users.map(({ password, ...u }) => u));
+      if (error) {
+        if (error.code === '42P01') return res.json([]);
+        throw error;
+      }
+      res.json(users.map(({ password, ...u }) => u));
+    } catch (error) {
+      next(error);
+    }
   });
 
   app.post("/api/employer/verify-email-request", authenticateToken, async (req: any, res) => {
@@ -464,7 +518,6 @@ async function startServer() {
     };
 
     await supabase.from('users').update({ verificationEmail: email }).eq('id', user.id);
-    console.log(`[VERIFICATION] Code for ${email}: ${code}`);
     res.json({ message: "Verification code sent to corporate email." });
   });
 
@@ -513,20 +566,22 @@ async function startServer() {
     res.json({ message: "Documents uploaded successfully. An admin will review them shortly.", user: { ...user, verificationDocuments: documents, verificationMethod: 'document' } });
   });
 
-  app.post("/api/admin/verify-employer", authenticateToken, async (req: any, res) => {
-    if (!req.user.isAdmin) return res.status(403).json({ message: "Forbidden" });
-    
-    const { userId } = req.body;
-    const { data: user, error } = await supabase
-      .from('users')
-      .select('*')
-      .or(`idNumber.eq.${userId},id.eq.${userId}`)
-      .single();
-    
-    if (error || !user) return res.status(404).json({ message: "Employer not found" });
-    
-    await supabase.from('users').update({ isVerified: true }).eq('id', user.id);
-    res.json({ message: "Employer verified successfully", user: { ...user, isVerified: true } });
+  app.post("/api/admin/verify-employer", authenticateToken, requireAdmin, async (req: any, res, next) => {
+    try {
+      const { userId } = req.body;
+      const { data: user, error } = await supabase
+        .from('users')
+        .select('*')
+        .or(`idNumber.eq.${userId},id.eq.${userId}`)
+        .single();
+      
+      if (error || !user) return res.status(404).json({ message: "Employer not found" });
+      
+      await supabase.from('users').update({ isVerified: true }).eq('id', user.id);
+      res.json({ message: "Employer verified successfully", user: { ...user, isVerified: true } });
+    } catch (error) {
+      next(error);
+    }
   });
 
   app.post("/api/auth/logout", (req, res) => {
@@ -542,7 +597,9 @@ async function startServer() {
       .eq('status', 'active')
       .order('postedAt', { ascending: false });
     
-    if (error) return res.status(500).json({ message: "Failed to fetch jobs" });
+    if (error) {
+      return res.json([]);
+    }
     res.json(jobs);
   });
 
@@ -574,7 +631,10 @@ async function startServer() {
     };
 
     const { data: insertedJob, error } = await supabase.from('jobs').insert([newJob]).select().single();
-    if (error) return res.status(500).json({ message: "Failed to post job" });
+    if (error) {
+      console.error("Failed to post job:", error);
+      return res.status(500).json({ message: "An unexpected error occurred. Please try again later." });
+    }
     
     res.json(insertedJob);
   });
@@ -587,7 +647,9 @@ async function startServer() {
       .eq('isDraft', false)
       .order('publishedAt', { ascending: false });
     
-    if (error) return res.status(500).json({ message: "Failed to fetch blog posts" });
+    if (error) {
+      return res.json([]);
+    }
     res.json(posts);
   });
 
@@ -610,7 +672,10 @@ async function startServer() {
     }
 
     const { data: post, error } = await supabase.from('blog_posts').insert([req.body]).select().single();
-    if (error) return res.status(500).json({ message: "Failed to create post" });
+    if (error) {
+      console.error("Failed to create post:", error);
+      return res.status(500).json({ message: "An unexpected error occurred. Please try again later." });
+    }
     res.json(post);
   });
 
@@ -621,7 +686,10 @@ async function startServer() {
     }
 
     const { data: post, error } = await supabase.from('blog_posts').update(req.body).eq('id', req.params.id).select().single();
-    if (error) return res.status(500).json({ message: "Failed to update post" });
+    if (error) {
+      console.error("Failed to update post:", error);
+      return res.status(500).json({ message: "An unexpected error occurred. Please try again later." });
+    }
     res.json(post);
   });
 
@@ -632,14 +700,19 @@ async function startServer() {
     }
 
     const { error } = await supabase.from('blog_posts').delete().eq('id', req.params.id);
-    if (error) return res.status(500).json({ message: "Failed to delete post" });
+    if (error) {
+      console.error("Failed to delete post:", error);
+      return res.status(500).json({ message: "An unexpected error occurred. Please try again later." });
+    }
     res.json({ message: "Post deleted" });
   });
 
   // Aptitude Test Routes
   app.get("/api/aptitude-tests", async (req, res) => {
     const { data: tests, error } = await supabase.from('aptitude_tests').select('*');
-    if (error) return res.status(500).json({ message: "Failed to fetch aptitude tests" });
+    if (error) {
+      return res.json([]);
+    }
     res.json(tests);
   });
 
@@ -650,7 +723,10 @@ async function startServer() {
     }
 
     const { data: test, error } = await supabase.from('aptitude_tests').insert([req.body]).select().single();
-    if (error) return res.status(500).json({ message: "Failed to create aptitude test" });
+    if (error) {
+      console.error("Failed to create aptitude test:", error);
+      return res.status(500).json({ message: "An unexpected error occurred. Please try again later." });
+    }
     res.json(test);
   });
 
@@ -672,7 +748,10 @@ async function startServer() {
     };
 
     const { data: insertedApp, error } = await supabase.from('applications').insert([newApplication]).select().single();
-    if (error) return res.status(500).json({ message: "Failed to submit application" });
+    if (error) {
+      console.error("Failed to submit application:", error);
+      return res.status(500).json({ message: "An unexpected error occurred. Please try again later." });
+    }
     
     res.json(insertedApp);
   });
@@ -686,7 +765,9 @@ async function startServer() {
       .eq('userId', user?.id)
       .order('appliedDate', { ascending: false });
     
-    if (error) return res.status(500).json({ message: "Failed to fetch applications" });
+    if (error) {
+      return res.json([]);
+    }
     res.json(apps);
   });
 
@@ -699,7 +780,10 @@ async function startServer() {
       .select()
       .single();
     
-    if (error) return res.status(500).json({ message: "Failed to update job" });
+    if (error) {
+      console.error("Failed to update job:", error);
+      return res.status(500).json({ message: "An unexpected error occurred. Please try again later." });
+    }
     res.json(job);
   });
 
@@ -716,7 +800,10 @@ async function startServer() {
       .select()
       .single();
     
-    if (error) return res.status(500).json({ message: "Failed to update application" });
+    if (error) {
+      console.error("Failed to update application:", error);
+      return res.status(500).json({ message: "An unexpected error occurred. Please try again later." });
+    }
     res.json(app);
   });
 
@@ -833,7 +920,7 @@ async function startServer() {
         user = inserted;
       }
 
-      const token = jwt.sign({ email: user.email, isEmployer: user.isEmployer, isAdmin: user.isAdmin }, JWT_SECRET, { expiresIn: "24h" });
+      const token = jwt.sign({ email: user.email, isEmployer: user.isEmployer, isAdmin: user.isAdmin, role: user.role }, JWT_SECRET, { expiresIn: "24h" });
       res.cookie("token", token, { httpOnly: true, secure: true, sameSite: "none" });
 
       res.send(`
@@ -853,7 +940,7 @@ async function startServer() {
       `);
     } catch (error) {
       console.error("Google OAuth Error:", error);
-      res.status(500).send("Authentication failed");
+      res.status(500).send("An unexpected error occurred. Please try again later.");
     }
   });
 
@@ -978,7 +1065,7 @@ async function startServer() {
         user = inserted;
       }
 
-      const token = jwt.sign({ email: user.email, isEmployer: user.isEmployer, isAdmin: user.isAdmin }, JWT_SECRET, { expiresIn: "24h" });
+      const token = jwt.sign({ email: user.email, isEmployer: user.isEmployer, isAdmin: user.isAdmin, role: user.role }, JWT_SECRET, { expiresIn: "24h" });
       res.cookie("token", token, { httpOnly: true, secure: true, sameSite: "none" });
 
       res.send(`
@@ -998,7 +1085,7 @@ async function startServer() {
       `);
     } catch (error) {
       console.error("LinkedIn OAuth Error:", error);
-      res.status(500).send("Authentication failed");
+      res.status(500).send("An unexpected error occurred. Please try again later.");
     }
   });
 
@@ -1006,16 +1093,13 @@ async function startServer() {
   const __dirname = path.dirname(__filename);
 
   // Vite middleware for development
-  console.log("Setting up Vite middleware...");
   if (process.env.NODE_ENV !== "production") {
-    console.log("Initializing Vite dev server...");
     try {
       const vite = await createViteServer({
         server: { middlewareMode: true },
         appType: "spa",
         configFile: path.resolve(__dirname, "vite.config.ts"),
       });
-      console.log("Vite dev server initialized.");
       app.use(vite.middlewares);
       
       // Fallback for SPA routes in dev mode
@@ -1044,12 +1128,11 @@ async function startServer() {
   // Global error handler
   app.use((err: any, req: any, res: any, next: any) => {
     console.error("Global Error Handler:", err);
-    res.status(500).json({ error: "Internal Server Error", message: err.message });
+    res.status(500).json({ message: "An unexpected error occurred. Please try again later." });
   });
 
-  console.log("Starting listener on port", PORT);
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+    // Server started
   });
 }
 

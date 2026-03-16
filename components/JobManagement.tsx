@@ -250,6 +250,8 @@ const JobManagement: React.FC<JobManagementProps> = ({
   const [listStatusFilter, setListStatusFilter] = useState<
     "all" | "active" | "closed" | "draft"
   >("all");
+  const [sortField, setSortField] = useState<"status" | "title" | "company">("title");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list');
   const [applicantViewMode, setApplicantViewMode] = useState<'list' | 'kanban'>('list');
   const [isBulkDownloading, setIsBulkDownloading] = useState(false);
@@ -678,14 +680,23 @@ const JobManagement: React.FC<JobManagementProps> = ({
     });
   };
 
-  const filteredManagementJobs = useMemo(
-    () =>
-      jobs.filter((job) => {
-        if (listStatusFilter === "all") return true;
-        return job.status === listStatusFilter;
-      }),
-    [jobs, listStatusFilter],
-  );
+  const filteredManagementJobs = useMemo(() => {
+    let result = jobs.filter((job) => {
+      if (listStatusFilter === "all") return true;
+      return job.status === listStatusFilter;
+    });
+
+    result.sort((a, b) => {
+      const valA = (a[sortField] || "").toLowerCase();
+      const valB = (b[sortField] || "").toLowerCase();
+      
+      if (valA < valB) return sortDirection === "asc" ? -1 : 1;
+      if (valA > valB) return sortDirection === "asc" ? 1 : -1;
+      return 0;
+    });
+
+    return result;
+  }, [jobs, listStatusFilter, sortField, sortDirection]);
 
   const availableRegions = useMemo(
     () => (tempCountry ? REGIONS_BY_COUNTRY[tempCountry] || [] : []),
@@ -901,6 +912,25 @@ const JobManagement: React.FC<JobManagementProps> = ({
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2 bg-white/5 p-1.5 rounded-xl border border-white/10">
+                    <span className="text-[10px] font-black text-white/20 uppercase tracking-widest pl-2">Sort:</span>
+                    <select
+                      value={sortField}
+                      onChange={(e) => setSortField(e.target.value as any)}
+                      className="bg-transparent text-[10px] font-black uppercase tracking-widest text-white/60 outline-none cursor-pointer hover:text-white transition-colors"
+                    >
+                      <option value="title" className="bg-[#0a4179]">Title</option>
+                      <option value="status" className="bg-[#0a4179]">Status</option>
+                      <option value="company" className="bg-[#0a4179]">Company</option>
+                    </select>
+                    <button
+                      onClick={() => setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc')}
+                      className="p-1.5 hover:bg-white/5 rounded-lg text-white/40 hover:text-white transition-all"
+                      title={sortDirection === 'asc' ? 'Sort Ascending' : 'Sort Descending'}
+                    >
+                      {sortDirection === 'asc' ? <TrendingUp size={14} /> : <TrendingUp size={14} className="rotate-180" />}
+                    </button>
+                  </div>
                   <div className="flex bg-white/5 p-1 rounded-xl border border-white/10">
                     <button 
                       onClick={() => setViewMode('list')}
