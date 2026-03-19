@@ -258,77 +258,19 @@ const SignIn: React.FC<SignInProps> = ({ onSignIn, onBack, initialIsEmployer = f
         return; // Redirecting...
       }
 
-      const response = await fetch(`/api/auth/${provider.toLowerCase()}/url?isEmployer=${isEmployer}`);
-      if (!response.ok) throw new Error(`Failed to get ${provider} auth URL`);
-      
-      const { url } = await response.json();
-      
-      const authWindow = window.open(
-        url,
-        'oauth_popup',
-        'width=600,height=700'
-      );
-
-      if (!authWindow) {
-        setError("Popup blocked. Please allow popups to sign in.");
-        setIsLoading(false);
-        return;
+      if (provider === 'LinkedIn') {
+        const { error } = await supabase.auth.signInWithOAuth({
+          provider: 'linkedin_oidc',
+          options: {
+            redirectTo: window.location.origin,
+          },
+        });
+        if (error) throw error;
+        return; // Redirecting...
       }
-
-      // Listen for success message from popup
-      const handleMessage = async (event: MessageEvent) => {
-        try {
-          const origin = event.origin;
-          if (!origin.endsWith('.run.app') && !origin.includes('localhost')) return;
-
-          if (event.data?.type === 'OAUTH_AUTH_SUCCESS') {
-            window.removeEventListener('message', handleMessage);
-            
-            // Fetch the newly logged-in user
-            try {
-              const meResponse = await fetch('/api/auth/me');
-              if (meResponse.ok) {
-                const userData = await meResponse.json();
-                // Use await here to ensure any async logic in onSignIn is handled
-                await onSignIn(userData);
-              } else {
-                setError("Failed to synchronize identity after social sign-in.");
-                setIsLoading(false);
-              }
-            } catch (err) {
-              console.error("Identity sync error:", err);
-              setError("Network error during identity synchronization.");
-              setIsLoading(false);
-            }
-          } else if (event.data?.type === 'OAUTH_AUTH_ERROR') {
-            window.removeEventListener('message', handleMessage);
-            setError(event.data.message || "Authentication failed.");
-            setIsLoading(false);
-          }
-        } catch (err) {
-          console.error("OAuth message handler error:", err);
-          setError("An unexpected error occurred during social login.");
-          setIsLoading(false);
-          window.removeEventListener('message', handleMessage);
-        }
-      };
-
-      window.addEventListener('message', handleMessage);
-
-      // Check if window is closed without success
-      const checkClosed = setInterval(() => {
-        if (authWindow.closed) {
-          clearInterval(checkClosed);
-          // Cleanup listener if window closed
-          setTimeout(() => {
-            window.removeEventListener('message', handleMessage);
-            if (isLoading) setIsLoading(false);
-          }, 1000);
-        }
-      }, 1000);
-
     } catch (err: any) {
-      setError(err.message);
+      console.error(`${provider} login error:`, err);
+      setError(err.message || `Failed to sign in with ${provider}. Please try again.`);
       setIsLoading(false);
     }
   };

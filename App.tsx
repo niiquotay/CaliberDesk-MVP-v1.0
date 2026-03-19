@@ -31,6 +31,7 @@ import WelcomeEmailModal from './components/WelcomeEmailModal';
 import OnboardingWizard from './components/OnboardingWizard';
 import Blog from './components/Blog';
 import Notifications from './components/Notifications';
+import AdminDashboard from './components/AdminDashboard';
 
 import { analyzeMatch } from './services/geminiService';
 import { Job, ViewType, UserProfile, Application, Transaction, JobAlert, ApplicationStatus, AptitudeTest, SubUser, Subsidiary, AppNotification } from './types';
