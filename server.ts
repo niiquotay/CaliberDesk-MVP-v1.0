@@ -1,5 +1,7 @@
 import express from "express";
 import cors from "cors";
+import helmet from "helmet";
+import { z } from "zod";
 import rateLimit from "express-rate-limit";
 import { createServer as createViteServer } from "vite";
 import jwt from "jsonwebtoken";
@@ -29,7 +31,19 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey);
 async function startServer() {
   const app = express();
   const PORT = 3000;
-  const JWT_SECRET = process.env.JWT_SECRET || "fallback_secret";
+  const JWT_SECRET = process.env.JWT_SECRET;
+
+  if (!JWT_SECRET || JWT_SECRET === "fallback_secret") {
+    console.warn("[SECURITY] JWT_SECRET is not set or using a weak fallback. Please set a strong secret in environment variables.");
+  }
+
+  const FINAL_JWT_SECRET = JWT_SECRET || "fallback_secret";
+
+  // Security Headers
+  app.use(helmet({
+    contentSecurityPolicy: false, // Disable CSP for development with Vite
+    crossOriginEmbedderPolicy: false
+  }));
 
   const googleClient = process.env.GOOGLE_CLIENT_ID ? new OAuth2Client(
     process.env.GOOGLE_CLIENT_ID,
@@ -41,17 +55,26 @@ async function startServer() {
     return `${origin}${path}`;
   };
 
+  // Resilient CORS for development and production
   const allowedOrigins = [
     process.env.APP_URL,
     process.env.SHARED_APP_URL,
-    'https://your-production-domain.com'
+    'http://localhost:3000',
+    'http://localhost:5173'
   ].filter(Boolean);
 
   app.use(cors({
     origin: function (origin, callback) {
-      if (!origin || allowedOrigins.includes(origin)) {
+      // Allow requests with no origin (like mobile apps or curl)
+      if (!origin) return callback(null, true);
+      
+      // In development, be more permissive
+      if (process.env.NODE_ENV !== 'production') return callback(null, true);
+
+      if (allowedOrigins.indexOf(origin) !== -1 || origin.endsWith('.run.app')) {
         callback(null, true);
       } else {
+        console.warn(`[CORS] Blocked origin: ${origin}`);
         callback(new Error('Not allowed by CORS'));
       }
     },
@@ -60,6 +83,26 @@ async function startServer() {
 
   app.use(express.json());
   app.use(cookieParser());
+
+  // Supabase Connection Health Check
+  const checkSupabaseConnection = async () => {
+    try {
+      const { data, error } = await supabase.from('users').select('id').limit(1);
+      if (error) {
+        if (error.message.includes('the client is offline')) {
+          console.error("[CRITICAL] Supabase client is offline. Check your URL and Key.");
+        } else {
+          console.error("[SYSTEM] Supabase connection error:", error.message);
+        }
+        return false;
+      }
+      console.log("[SYSTEM] Supabase connection verified.");
+      return true;
+    } catch (err) {
+      console.error("[SYSTEM] Supabase connection failed:", err);
+      return false;
+    }
+  };
 
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
@@ -98,6 +141,7 @@ async function startServer() {
 
   // Helper to check and deactivate unverified accounts
   const checkDeactivations = async () => {
+    if (!tablesReady) return;
     const now = new Date();
     const { data: users, error } = await supabase.from('users').select('*');
     if (error || !users) return;
@@ -117,16 +161,327 @@ async function startServer() {
   setInterval(checkDeactivations, 60 * 60 * 1000);
   checkDeactivations(); // Initial check
 
-  // Seed mock users if database is empty
+  // Helper to check for job expiries and notify applicants
+  const checkJobExpiries = async () => {
+    if (!tablesReady) return;
+    const now = new Date();
+    const fortyEightHoursLater = new Date(now.getTime() + 48 * 60 * 60 * 1000);
+
+    console.log("[SYSTEM] Checking for jobs nearing expiry...");
+
+    try {
+      // Fetch active jobs that expire in the next 48 hours
+      const { data: jobs, error: jobsError } = await supabase
+        .from('jobs')
+        .select('*')
+        .eq('status', 'active')
+        .lte('expiryDate', fortyEightHoursLater.toISOString())
+        .gt('expiryDate', now.toISOString());
+
+      if (jobsError) {
+        console.error("[SYSTEM] Job expiry query error:", jobsError.message || jobsError);
+        return;
+      }
+      if (!jobs || jobs.length === 0) {
+        console.log("[SYSTEM] No jobs nearing expiry found.");
+        return;
+      }
+
+      for (const job of jobs) {
+        // Fetch applications for this job
+        const { data: apps, error: appsError } = await supabase
+          .from('applications')
+          .select('userId')
+          .eq('jobId', job.id);
+
+        if (appsError) {
+          console.error(`[SYSTEM] Error fetching applications for job ${job.id}:`, appsError.message);
+          continue;
+        }
+
+        if (!apps || apps.length === 0) continue;
+
+        const userIds = apps.map(a => a.userId).filter(Boolean);
+        if (userIds.length === 0) continue;
+
+        // Fetch users to notify
+        const { data: users, error: usersError } = await supabase
+          .from('users')
+          .select('*')
+          .in('id', userIds);
+
+        if (usersError) {
+          console.error(`[SYSTEM] Error fetching users for job expiry notification:`, usersError.message);
+          continue;
+        }
+
+        if (!users) continue;
+
+        for (const user of users) {
+          const notifications = user.notifications || [];
+          const alreadyNotified = notifications.some((n: any) => 
+            n.title === 'Job Expiry Warning' && n.message.includes(job.title)
+          );
+
+          if (!alreadyNotified) {
+            const expiryStr = new Date(job.expiryDate).toLocaleDateString();
+            const msg = `The job "${job.title}" at ${job.company} you applied to is expiring soon (on ${expiryStr}). Keep an eye on your application status!`;
+            
+            notifications.unshift({
+              id: Math.random().toString(36).substr(2, 9),
+              title: 'Job Expiry Warning',
+              message: msg,
+              type: 'both',
+              category: 'application',
+              date: now.toISOString(),
+              isRead: false,
+              actionLink: { label: 'View Job', view: 'job-details', params: job }
+            });
+
+            await supabase.from('users').update({ notifications }).eq('id', user.id);
+            console.log(`[EXPIRY-NOTIFICATION] To: ${user.email}, Message: ${msg}`);
+            console.log(`[EMAIL] To: ${user.email}, Subject: Job Expiry Warning - CaliberDesk, Body: ${msg}`);
+          }
+        }
+      }
+    } catch (err: any) {
+      console.error("[SYSTEM] Job expiry check failed:", err.message || err);
+    }
+  };
+
+  // Run job expiry check every 12 hours (simulated)
+  setInterval(checkJobExpiries, 12 * 60 * 60 * 1000);
+  setTimeout(checkJobExpiries, 5000); // Initial check after startup
+
+  // Helper to check for assessment reminders
+  const checkAssessmentReminders = async () => {
+    if (!tablesReady) return;
+    const now = new Date();
+    console.log("[SYSTEM] Checking for assessment reminders...");
+
+    try {
+      const { data: users, error } = await supabase
+        .from('users')
+        .select('*')
+        .not('pendingAssessmentReminders', 'is', null);
+
+      if (error) {
+        console.error("[SYSTEM] Assessment reminder query error:", error.message || error);
+        return;
+      }
+      if (!users) return;
+
+      for (const user of users) {
+        const reminders = user.pendingAssessmentReminders || [];
+        if (reminders.length === 0) continue;
+
+        let updatedReminders = [...reminders];
+        let changed = false;
+
+        for (let i = 0; i < updatedReminders.length; i++) {
+          const reminder = updatedReminders[i];
+          const matchedAt = new Date(reminder.matchedAt);
+          const diffHours = (now.getTime() - matchedAt.getTime()) / (1000 * 60 * 60);
+
+          // Check if user already applied
+          const { data: app } = await supabase
+            .from('applications')
+            .select('id')
+            .eq('userId', user.id)
+            .eq('jobId', reminder.jobId)
+            .single();
+
+          if (app) {
+            // User applied, remove reminder
+            updatedReminders.splice(i, 1);
+            i--;
+            changed = true;
+            continue;
+          }
+
+          let shouldNotify = false;
+          let newRemindersSent = reminder.remindersSent;
+
+          if (diffHours >= 72 && reminder.remindersSent < 3) {
+            shouldNotify = true;
+            newRemindersSent = 3;
+          } else if (diffHours >= 36 && reminder.remindersSent < 2) {
+            shouldNotify = true;
+            newRemindersSent = 2;
+          } else if (diffHours >= 24 && reminder.remindersSent < 1) {
+            shouldNotify = true;
+            newRemindersSent = 1;
+          }
+
+          if (shouldNotify) {
+            const { data: job } = await supabase.from('jobs').select('title, company').eq('id', reminder.jobId).single();
+            if (job) {
+              const msg = `Reminder: You have a high match for ${job.title} at ${job.company}. Please complete the assessment to finalize your application.`;
+              const notifications = user.notifications || [];
+              notifications.unshift({
+                id: Math.random().toString(36).substr(2, 9),
+                title: 'Assessment Reminder',
+                message: msg,
+                type: 'both',
+                category: 'application',
+                date: now.toISOString(),
+                isRead: false,
+                actionLink: { label: 'Take Assessment', view: 'job-details', params: { id: reminder.jobId, ...job } }
+              });
+
+              await supabase.from('users').update({ 
+                notifications,
+                pendingAssessmentReminders: updatedReminders.map((r, idx) => idx === i ? { ...r, remindersSent: newRemindersSent } : r)
+              }).eq('id', user.id);
+              
+              console.log(`[ASSESSMENT-REMINDER] To: ${user.email}, Message: ${msg}`);
+              console.log(`[EMAIL] To: ${user.email}, Subject: Assessment Reminder - CaliberDesk, Body: ${msg}`);
+              
+              updatedReminders[i].remindersSent = newRemindersSent;
+              changed = true;
+            }
+          }
+          
+          // If 72h passed and last reminder sent, we can stop tracking this one
+          if (diffHours > 72 && updatedReminders[i].remindersSent >= 3) {
+             updatedReminders.splice(i, 1);
+             i--;
+             changed = true;
+          }
+        }
+
+        if (changed) {
+          await supabase.from('users').update({ pendingAssessmentReminders: updatedReminders }).eq('id', user.id);
+        }
+      }
+    } catch (err: any) {
+      console.error("[SYSTEM] Assessment reminder check failed:", err.message || err);
+    }
+  };
+
+  // Run assessment reminder check every 6 hours (simulated)
+  setInterval(checkAssessmentReminders, 6 * 60 * 60 * 1000);
+  setTimeout(checkAssessmentReminders, 10000); // Initial check after startup
+
+  // Helper to check for 7-day application status updates
+  const checkApplication7dUpdates = async () => {
+    if (!tablesReady) return;
+    const now = new Date();
+    console.log("[SYSTEM] Checking for 7-day application status updates...");
+
+    try {
+      const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      
+      const { data: apps, error } = await supabase
+        .from('applications')
+        .select('*, jobs(title, company), users(*)')
+        .lte('appliedDate', sevenDaysAgo)
+        .eq('reminderSent7d', false)
+        .neq('status', 'rejected')
+        .neq('status', 'hired')
+        .neq('status', 'closed');
+
+      if (error) {
+        console.error("[SYSTEM] 7-day application update query error:", error.message || error);
+        return;
+      }
+      if (!apps) return;
+
+      for (const app of apps) {
+        const user = app.users;
+        const job = app.jobs;
+        if (!user || !job) continue;
+
+        const msg = `Update on your application for ${job.title} at ${job.company}: Your current status is "${app.status}". The employer is still reviewing candidates.`;
+        const notifications = user.notifications || [];
+        notifications.unshift({
+          id: Math.random().toString(36).substr(2, 9),
+          title: 'Application Status Update',
+          message: msg,
+          type: 'both',
+          category: 'application',
+          date: now.toISOString(),
+          isRead: false,
+          actionLink: { label: 'Track Application', view: 'seeker-applications' }
+        });
+
+        await supabase.from('users').update({ notifications }).eq('id', user.id);
+        await supabase.from('applications').update({ reminderSent7d: true }).eq('id', app.id);
+        
+        console.log(`[7D-UPDATE] To: ${user.email}, Message: ${msg}`);
+        console.log(`[EMAIL] To: ${user.email}, Subject: Application Update - CaliberDesk, Body: ${msg}`);
+      }
+    } catch (err: any) {
+      console.error("[SYSTEM] 7-day application update check failed:", err.message || err);
+    }
+  };
+
+  // Run 7-day update check every 24 hours
+  setInterval(checkApplication7dUpdates, 24 * 60 * 60 * 1000);
+  setTimeout(checkApplication7dUpdates, 15000); // Initial check after startup
+
+  // Validation Schemas
+  const loginSchema = z.object({
+    email: z.string().email(),
+    password: z.string().min(6),
+    isEmployer: z.boolean().optional()
+  });
+
+  const registerSchema = z.object({
+    firstName: z.string().min(1),
+    middleName: z.string().optional(),
+    lastName: z.string().min(1),
+    email: z.string().email(),
+    password: z.string().min(8),
+    isEmployer: z.boolean(),
+    phone: z.string().min(5),
+    country: z.string().min(1),
+    companyName: z.string().optional(),
+    subUsers: z.array(z.any()).optional(),
+    verificationCode: z.string().optional()
+  });
+
+  // Auth Middleware
+  const authenticateToken = (req: any, res: any, next: any) => {
+    const token = req.cookies.token;
+    if (!token) return res.status(401).json({ message: "Unauthorized" });
+
+    jwt.verify(token, FINAL_JWT_SECRET, (err: any, user: any) => {
+      if (err) return res.status(403).json({ message: "Forbidden" });
+      req.user = user;
+      next();
+    });
+  };
+  let tablesReady = false;
+
   const seedMockUsers = async () => {
+    // Check if required tables exist
+    const requiredTables = ['users', 'jobs', 'blog_posts', 'applications', 'aptitude_tests'];
+    let allExist = true;
+
+    for (const table of requiredTables) {
+      const { error } = await supabase.from(table).select('id').limit(1);
+      if (error) {
+        if (error.code === '42P01' || error.message?.includes('schema cache')) {
+          console.error(`\n[CRITICAL] Supabase table '${table}' not found.`);
+          allExist = false;
+        } else {
+          console.error(`[SYSTEM] Error checking table '${table}':`, error.message || error);
+        }
+      }
+    }
+
+    if (!allExist) {
+      console.error(`[CRITICAL] Some required tables are missing.`);
+      console.error(`[CRITICAL] Please follow the instructions in SUPABASE_SETUP.md to create the required tables.\n`);
+      tablesReady = false;
+      return;
+    }
+
+    tablesReady = true;
     const { count: userCount, error: userError } = await supabase.from('users').select('*', { count: 'exact', head: true });
     
     if (userError) {
-      if (userError.code === '42P01') {
-        console.error("\n[CRITICAL] Supabase 'users' table not found.");
-        console.error("[CRITICAL] Please follow the instructions in SUPABASE_SETUP.md to create the required tables.\n");
-        return;
-      }
       console.error("[SYSTEM] Error checking users table:", userError);
       return;
     }
@@ -168,25 +523,25 @@ async function startServer() {
         publishedAt: new Date().toISOString()
       }));
       const { error } = await supabase.from('blog_posts').insert(mockPosts);
-      if (error) console.error("[SYSTEM] Seeding blog posts error:", error);
+      if (error) console.error("[SYSTEM] Seeding blog posts error:", JSON.stringify(error, null, 2));
     }
 
     const { count: testCount } = await supabase.from('aptitude_tests').select('*', { count: 'exact', head: true });
     if (testCount === 0) {
       const { data: jobs } = await supabase.from('jobs').select('id, idNumber');
       const mockTests = MOCK_APTITUDE_TESTS.map(t => {
-        const job = jobs?.find(j => j.idNumber === t.jobId);
+        // Find the job by its original mock ID (which is now a UUID in constants.ts)
+        const job = jobs?.find(j => j.id === t.jobId);
         return {
           ...t,
-          jobId: job?.id,
+          jobId: job?.id || t.jobId,
           createdAt: new Date().toISOString()
         };
       });
       const { error } = await supabase.from('aptitude_tests').insert(mockTests);
-      if (error) console.error("[SYSTEM] Seeding tests error:", error);
+      if (error) console.error("[SYSTEM] Seeding tests error:", JSON.stringify(error, null, 2));
     }
   };
-  seedMockUsers();
 
   // In-memory verification codes
   const verificationCodes: Record<string, { code: string; expires: number }> = {};
@@ -197,17 +552,6 @@ async function startServer() {
   };
 
   // Auth Middleware
-  const authenticateToken = (req: any, res: any, next: any) => {
-    const token = req.cookies.token;
-    if (!token) return res.status(401).json({ message: "Unauthorized" });
-
-    jwt.verify(token, JWT_SECRET, (err: any, user: any) => {
-      if (err) return res.status(403).json({ message: "Forbidden" });
-      req.user = user;
-      next();
-    });
-  };
-
   const requireAdmin = (req: any, res: any, next: any) => {
     if (!req.user || (!req.user.isAdmin && req.user.role !== 'admin' && !req.user.opRole)) {
       return res.status(403).json({ message: "Forbidden: Admin access required" });
@@ -215,7 +559,15 @@ async function startServer() {
     next();
   };
 
-  // API Routes
+  // Rate Limiters
+  const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 10, // Limit each IP to 10 login/register attempts per window
+    message: { message: "Too many authentication attempts, please try again after 15 minutes" },
+    standardHeaders: true,
+    legacyHeaders: false
+  });
+
   const passwordResetLimiter = rateLimit({
     windowMs: 60 * 60 * 1000, // 1 hour
     max: 3, // Limit each IP to 3 requests per `window` (here, per hour)
@@ -267,9 +619,14 @@ async function startServer() {
     res.json({ message: "Code verified successfully" });
   });
 
-  app.post("/api/auth/register", async (req, res) => {
+  app.post("/api/auth/register", authLimiter, async (req, res) => {
     try {
-      const { firstName, middleName, lastName, email, password, isEmployer, phone, country, companyName, subUsers, verificationCode } = req.body;
+      const validation = registerSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ message: "Invalid input data", errors: (validation.error as any).errors });
+      }
+
+      const { firstName, middleName, lastName, email, password, isEmployer, phone, country, companyName, subUsers, verificationCode } = validation.data;
       const name = `${firstName} ${middleName ? middleName + ' ' : ''}${lastName}`;
       
       if (email.toLowerCase().endsWith('@caliberdesk.com')) {
@@ -368,7 +725,7 @@ async function startServer() {
         );
       }
 
-      const token = jwt.sign({ email: insertedUser.email, isEmployer: insertedUser.isEmployer, isAdmin: insertedUser.isAdmin, role: insertedUser.role }, JWT_SECRET, { expiresIn: "24h" });
+      const token = jwt.sign({ email: insertedUser.email, isEmployer: insertedUser.isEmployer, isAdmin: insertedUser.isAdmin, role: insertedUser.role }, FINAL_JWT_SECRET, { expiresIn: "24h" });
       res.cookie("token", token, { httpOnly: true, secure: true, sameSite: "none" });
       
       const { password: _, ...userWithoutPassword } = insertedUser;
@@ -379,9 +736,14 @@ async function startServer() {
     }
   });
 
-  app.post("/api/auth/login", async (req, res) => {
+  app.post("/api/auth/login", authLimiter, async (req, res) => {
     try {
-      const { email, password, isEmployer } = req.body;
+      const validation = loginSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ message: "Invalid input data" });
+      }
+
+      const { email, password, isEmployer } = validation.data;
       
       // Find user by email AND role in Supabase
       let query = supabase
@@ -422,7 +784,7 @@ async function startServer() {
       return res.status(401).json({ message: "Unauthorized staff access. Please contact an administrator." });
     }
 
-    const isMatch = user.password === password || (user.password && await bcrypt.compare(password, user.password));
+    const isMatch = user.password && await bcrypt.compare(password, user.password);
 
     if (!isMatch) {
       return res.status(401).json({ message: "Invalid credentials" });
@@ -434,12 +796,59 @@ async function startServer() {
       });
     }
 
-    const token = jwt.sign({ email: user.email, isEmployer: user.isEmployer, isAdmin: user.isAdmin, role: user.role }, JWT_SECRET, { expiresIn: "24h" });
+    const token = jwt.sign({ email: user.email, isEmployer: user.isEmployer, isAdmin: user.isAdmin, role: user.role }, FINAL_JWT_SECRET, { expiresIn: "24h" });
     res.cookie("token", token, { httpOnly: true, secure: true, sameSite: "none" });
 
     const { password: _, ...userWithoutPassword } = user;
     res.json(userWithoutPassword);
   };
+
+  app.post("/api/auth/sync", async (req, res) => {
+    try {
+      const { access_token } = req.body;
+      if (!access_token) {
+        return res.status(400).json({ message: "Access token required" });
+      }
+
+      const { data: { user: sbUser }, error: sbError } = await supabase.auth.getUser(access_token);
+      if (sbError || !sbUser) {
+        return res.status(401).json({ message: "Invalid Supabase session" });
+      }
+
+      const email = sbUser.email?.toLowerCase();
+      let { data: user } = await supabase
+        .from('users')
+        .select('*')
+        .eq('email', email)
+        .single();
+
+      if (!user) {
+        // Create user if not exists (defaulting to Seeker)
+        const newUser = {
+          name: sbUser.user_metadata.full_name || sbUser.user_metadata.name || email?.split('@')[0],
+          email,
+          isEmployer: false,
+          isVerified: true,
+          role: "Seeker",
+          joinedDate: new Date().toISOString(),
+          idNumber: generateIdNumber('SKR'),
+          profileCompleted: false
+        };
+        const { data: inserted, error: insertError } = await supabase.from('users').insert([newUser]).select().single();
+        if (insertError) throw insertError;
+        user = inserted;
+      }
+
+      const token = jwt.sign({ email: user.email, isEmployer: user.isEmployer, isAdmin: user.isAdmin, role: user.role }, FINAL_JWT_SECRET, { expiresIn: "24h" });
+      res.cookie("token", token, { httpOnly: true, secure: true, sameSite: "none" });
+      
+      const { password: _, ...userWithoutPassword } = user;
+      res.json(userWithoutPassword);
+    } catch (error) {
+      console.error("Auth sync error:", error);
+      res.status(500).json({ message: "Failed to synchronize session" });
+    }
+  });
 
   app.get("/api/auth/me", authenticateToken, async (req: any, res) => {
     const { data: user, error } = await supabase
@@ -734,7 +1143,7 @@ async function startServer() {
   app.post("/api/applications", authenticateToken, async (req: any, res) => {
     const { jobId, matchScore, matchReason, isAutoApplied } = req.body;
     
-    const { data: user } = await supabase.from('users').select('id').eq('email', req.user.email).single();
+    const { data: user } = await supabase.from('users').select('*').eq('email', req.user.email).single();
     
     const newApplication = {
       jobId,
@@ -747,13 +1156,145 @@ async function startServer() {
       statusHistory: [{ status: 'applied', date: new Date().toISOString() }]
     };
 
-    const { data: insertedApp, error } = await supabase.from('applications').insert([newApplication]).select().single();
+    const { data: insertedApp, error } = await supabase.from('applications').insert([newApplication]).select('*, jobs(title, company)').single();
     if (error) {
       console.error("Failed to submit application:", error);
       return res.status(500).json({ message: "An unexpected error occurred. Please try again later." });
     }
+
+    // Send confirmation notification
+    const job = insertedApp.jobs;
+    const confirmMsg = `Your application for ${job.title} at ${job.company} has been successfully submitted. We'll notify you of any updates.`;
+    const notifications = user.notifications || [];
+    notifications.unshift({
+      id: Math.random().toString(36).substr(2, 9),
+      title: 'Application Submitted',
+      message: confirmMsg,
+      type: 'both',
+      category: 'application',
+      date: new Date().toISOString(),
+      isRead: false,
+      actionLink: { label: 'Track Application', view: 'seeker-applications' }
+    });
+    await supabase.from('users').update({ notifications }).eq('id', user.id);
+    console.log(`[APP-CONFIRM] To: ${user.email}, Message: ${confirmMsg}`);
+    console.log(`[EMAIL] To: ${user.email}, Subject: Application Received - CaliberDesk, Body: ${confirmMsg}`);
+
+    // Clean up pending assessment reminders for this job
+    if (user && user.pendingAssessmentReminders) {
+      const updatedReminders = user.pendingAssessmentReminders.filter((r: any) => r.jobId !== jobId);
+      if (updatedReminders.length !== user.pendingAssessmentReminders.length) {
+        await supabase.from('users').update({ pendingAssessmentReminders: updatedReminders }).eq('id', user.id);
+      }
+    }
     
     res.json(insertedApp);
+  });
+
+  app.put("/api/user/profile", authenticateToken, async (req: any, res) => {
+    const { data: user, error: fetchError } = await supabase.from('users').select('id').eq('email', req.user.email).single();
+    if (fetchError || !user) return res.status(404).json({ message: "User not found" });
+
+    const { error: updateError } = await supabase.from('users').update(req.body).eq('id', user.id);
+    if (updateError) {
+      console.error("Failed to update profile:", updateError);
+      return res.status(500).json({ message: "Failed to update profile" });
+    }
+
+    res.json({ message: "Profile updated successfully" });
+  });
+
+  app.post("/api/user/purchase-verification", authenticateToken, async (req: any, res) => {
+    const { data: user, error: fetchError } = await supabase.from('users').select('*').eq('email', req.user.email).single();
+    if (fetchError || !user) return res.status(404).json({ message: "User not found" });
+
+    // Simulate payment processing
+    const amount = 49.99;
+    const transaction = {
+      id: Math.random().toString(36).substr(2, 9),
+      date: new Date().toISOString(),
+      item: "Employment History Verification Service",
+      amount,
+      status: 'completed',
+      paymentMethod: 'Credit Card'
+    };
+
+    const purchaseHistory = user.purchaseHistory || [];
+    purchaseHistory.push(transaction);
+
+    const { error: updateError } = await supabase.from('users').update({
+      purchaseHistory,
+      employmentVerificationStatus: 'pending'
+    }).eq('id', user.id);
+
+    if (updateError) {
+      console.error("Failed to process verification purchase:", updateError);
+      return res.status(500).json({ message: "Failed to process purchase" });
+    }
+
+    const notifications = user.notifications || [];
+    notifications.unshift({
+      id: Math.random().toString(36).substr(2, 9),
+      title: 'Verification Service Purchased',
+      message: 'You have successfully purchased the Employment History Verification Service. Our team will now reach out to your past employers.',
+      type: 'both',
+      category: 'system',
+      date: new Date().toISOString(),
+      isRead: false
+    });
+    await supabase.from('users').update({ notifications }).eq('id', user.id);
+
+    res.json({ message: "Verification service purchased successfully", status: 'pending' });
+  });
+
+  app.post("/api/admin/verify-employment", authenticateToken, async (req: any, res) => {
+    const { userId, experienceIndex, isVerified } = req.body;
+
+    const { data: adminUser } = await supabase.from('users').select('isAdmin, opRole').eq('email', req.user.email).single();
+    if (!adminUser?.isAdmin && adminUser?.opRole !== 'super_admin') {
+      return res.status(403).json({ message: "Unauthorized" });
+    }
+
+    const { data: targetUser, error: fetchError } = await supabase.from('users').select('*').eq('id', userId).single();
+    if (fetchError || !targetUser) return res.status(404).json({ message: "User not found" });
+
+    const workHistory = [...(targetUser.workHistory || [])];
+    if (experienceIndex < 0 || experienceIndex >= workHistory.length) {
+      return res.status(400).json({ message: "Invalid experience index" });
+    }
+
+    workHistory[experienceIndex].isVerified = isVerified;
+
+    const allVerified = workHistory.every(exp => exp.isVerified);
+    const employmentVerificationStatus = allVerified ? 'completed' : 'pending';
+    
+    const updateData: any = { workHistory, employmentVerificationStatus };
+    if (allVerified) {
+      updateData.verificationCertificateUrl = `https://caliberdesk.com/certificates/verify-${targetUser.id}.pdf`;
+    }
+
+    const { error: updateError } = await supabase.from('users').update(updateData).eq('id', userId);
+
+    if (updateError) {
+      console.error("Failed to update employment verification:", updateError);
+      return res.status(500).json({ message: "Failed to update verification" });
+    }
+
+    if (allVerified) {
+      const notifications = targetUser.notifications || [];
+      notifications.unshift({
+        id: Math.random().toString(36).substr(2, 9),
+        title: 'Employment Verification Completed',
+        message: 'Congratulations! Your employment history has been fully verified. You now have a verification badge and a digital certificate available on your profile.',
+        type: 'both',
+        category: 'system',
+        date: new Date().toISOString(),
+        isRead: false
+      });
+      await supabase.from('users').update({ notifications }).eq('id', userId);
+    }
+
+    res.json({ message: "Employment verification updated", status: employmentVerificationStatus });
   });
 
   app.get("/api/my-applications", authenticateToken, async (req: any, res) => {
@@ -784,6 +1325,38 @@ async function startServer() {
       console.error("Failed to update job:", error);
       return res.status(500).json({ message: "An unexpected error occurred. Please try again later." });
     }
+
+    // If job is closed, notify all applicants
+    if (status === 'closed') {
+      const { data: apps } = await supabase
+        .from('applications')
+        .select('*, users(*)')
+        .eq('jobId', job.id);
+      
+      if (apps) {
+        for (const app of apps) {
+          const user = app.users;
+          if (!user) continue;
+
+          const closeMsg = `The job "${job.title}" at ${job.company} has officially closed for applications. The employer will reach out to you directly if you are successful. Thank you for applying!`;
+          const notifications = user.notifications || [];
+          notifications.unshift({
+            id: Math.random().toString(36).substr(2, 9),
+            title: 'Job Closed',
+            message: closeMsg,
+            type: 'both',
+            category: 'application',
+            date: new Date().toISOString(),
+            isRead: false,
+            actionLink: { label: 'Track Application', view: 'seeker-applications' }
+          });
+          await supabase.from('users').update({ notifications }).eq('id', user.id);
+          console.log(`[JOB-CLOSED] To: ${user.email}, Message: ${closeMsg}`);
+          console.log(`[EMAIL] To: ${user.email}, Subject: Job Closed - ${job.title}, Body: ${closeMsg}`);
+        }
+      }
+    }
+
     res.json(job);
   });
 
@@ -797,13 +1370,37 @@ async function startServer() {
       .from('applications')
       .update(updateData)
       .eq('id', req.params.id)
-      .select()
+      .select('*, jobs(title, company), users(*)')
       .single();
     
     if (error) {
       console.error("Failed to update application:", error);
       return res.status(500).json({ message: "An unexpected error occurred. Please try again later." });
     }
+
+    // If status updated, notify seeker
+    if (status) {
+      const user = app.users;
+      const job = app.jobs;
+      if (user && job) {
+        const statusMsg = `Your application for ${job.title} at ${job.company} has been updated to: ${status.toUpperCase()}.`;
+        const notifications = user.notifications || [];
+        notifications.unshift({
+          id: Math.random().toString(36).substr(2, 9),
+          title: 'Application Status Updated',
+          message: statusMsg,
+          type: 'both',
+          category: 'application',
+          date: new Date().toISOString(),
+          isRead: false,
+          actionLink: { label: 'Track Application', view: 'seeker-applications' }
+        });
+        await supabase.from('users').update({ notifications }).eq('id', user.id);
+        console.log(`[STATUS-UPDATE] To: ${user.email}, Message: ${statusMsg}`);
+        console.log(`[EMAIL] To: ${user.email}, Subject: Application Status Updated - CaliberDesk, Body: ${statusMsg}`);
+      }
+    }
+
     res.json(app);
   });
 
@@ -920,7 +1517,7 @@ async function startServer() {
         user = inserted;
       }
 
-      const token = jwt.sign({ email: user.email, isEmployer: user.isEmployer, isAdmin: user.isAdmin, role: user.role }, JWT_SECRET, { expiresIn: "24h" });
+      const token = jwt.sign({ email: user.email, isEmployer: user.isEmployer, isAdmin: user.isAdmin, role: user.role }, FINAL_JWT_SECRET, { expiresIn: "24h" });
       res.cookie("token", token, { httpOnly: true, secure: true, sameSite: "none" });
 
       res.send(`
@@ -1065,7 +1662,7 @@ async function startServer() {
         user = inserted;
       }
 
-      const token = jwt.sign({ email: user.email, isEmployer: user.isEmployer, isAdmin: user.isAdmin, role: user.role }, JWT_SECRET, { expiresIn: "24h" });
+      const token = jwt.sign({ email: user.email, isEmployer: user.isEmployer, isAdmin: user.isAdmin, role: user.role }, FINAL_JWT_SECRET, { expiresIn: "24h" });
       res.cookie("token", token, { httpOnly: true, secure: true, sameSite: "none" });
 
       res.send(`
@@ -1131,8 +1728,10 @@ async function startServer() {
     res.status(500).json({ message: "An unexpected error occurred. Please try again later." });
   });
 
-  app.listen(PORT, "0.0.0.0", () => {
-    // Server started
+  app.listen(PORT, "0.0.0.0", async () => {
+    console.log(`Server running on http://localhost:${PORT}`);
+    await checkSupabaseConnection();
+    await seedMockUsers();
   });
 }
 

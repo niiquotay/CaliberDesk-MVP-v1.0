@@ -6,6 +6,8 @@ import {
   User, Check, Info, X, AlertCircle
 } from 'lucide-react';
 
+import { supabase } from '../src/lib/supabase';
+
 interface AuthGateProps {
   initialRole?: 'seeker' | 'employer';
   onSelectSeeker: (user: any) => void;
@@ -116,6 +118,17 @@ const AuthGate: React.FC<AuthGateProps> = ({ initialRole = 'seeker', onSelectSee
     setError(null);
     
     try {
+      if (provider === 'Google') {
+        const { error } = await supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            redirectTo: window.location.origin,
+          },
+        });
+        if (error) throw error;
+        return; // Redirecting...
+      }
+
       const response = await fetch(`/api/auth/${provider.toLowerCase()}/url?isEmployer=${role === 'employer'}`);
       if (!response.ok) throw new Error(`Failed to get ${provider} auth URL`);
       

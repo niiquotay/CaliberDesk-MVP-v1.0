@@ -729,7 +729,7 @@ export const MOCK_CANDIDATES: UserProfile[] = [
 
 export const MOCK_BLOG_POSTS: BlogPost[] = [
   {
-    id: 'post-1',
+    id: '11111111-1111-1111-1111-111111111111',
     title: 'The Future of Remote Work in 2026',
     content: 'Remote work has evolved significantly over the past few years. In 2026, we are seeing a shift towards more asynchronous communication and AI-driven productivity tools. Companies are no longer just offering "remote" as a perk; it is becoming the standard for global operations. The integration of VR and AR in virtual meetings is making collaboration more immersive than ever before.',
     author: 'Master Admin',
@@ -741,7 +741,7 @@ export const MOCK_BLOG_POSTS: BlogPost[] = [
     readTime: '5 min read'
   },
   {
-    id: 'post-2',
+    id: '11111111-1111-1111-1111-111111111112',
     title: 'How to Optimize Your CV for AI-Driven Recruitment',
     content: 'Modern recruitment systems use AI to screen thousands of applications. To stand out, you need to ensure your CV is optimized for these algorithms. This means using clear headings, standard fonts, and strategically placing keywords that match the job description. Avoid complex graphics that might confuse the parser, and focus on quantifiable achievements.',
     author: 'Rick Recruiter',
@@ -753,7 +753,7 @@ export const MOCK_BLOG_POSTS: BlogPost[] = [
     readTime: '8 min read'
   },
   {
-    id: 'post-3',
+    id: '11111111-1111-1111-1111-111111111113',
     title: 'Navigating the Tech Job Market in 2026',
     content: 'The tech landscape is constantly changing. With the rise of specialized AI roles and the consolidation of traditional software engineering, staying relevant requires continuous learning. Focus on building a strong portfolio of real-world projects and demonstrating your ability to adapt to new technologies quickly.',
     author: 'Sarah Sales',
@@ -764,7 +764,7 @@ export const MOCK_BLOG_POSTS: BlogPost[] = [
     readTime: '6 min read'
   },
   {
-    id: 'post-4',
+    id: '11111111-1111-1111-1111-111111111114',
     title: 'Global Tech Recruitment Summit 2026',
     content: 'Join us for the largest gathering of recruitment professionals and tech leaders. We will discuss the latest trends in AI-driven hiring, diversity in tech, and the future of global talent acquisition. Keynote speakers include industry pioneers from Silicon Valley and beyond.',
     author: 'Rachel Head-Rec',
@@ -775,7 +775,7 @@ export const MOCK_BLOG_POSTS: BlogPost[] = [
     readTime: 'Event Date: Oct 15, 2026'
   },
   {
-    id: 'post-5',
+    id: '11111111-1111-1111-1111-111111111115',
     title: 'CaliberDesk Expands Operations to Southeast Asia',
     content: 'We are thrilled to announce our expansion into the Southeast Asian market. With new offices in Singapore and Ho Chi Minh City, CaliberDesk is poised to connect top talent with the region\'s booming tech ecosystem. This move marks a significant milestone in our mission to globalize social hiring.',
     author: 'Master Admin',
@@ -786,7 +786,7 @@ export const MOCK_BLOG_POSTS: BlogPost[] = [
     readTime: '3 min read'
   },
   {
-    id: 'post-6',
+    id: '11111111-1111-1111-1111-111111111116',
     title: 'Market Report: The Rise of "Fractional" C-Suite Roles',
     content: 'Our latest market data indicates a 40% increase in demand for fractional executives. Companies are increasingly looking for experienced leaders on a part-time or project basis to navigate complex transitions or scale specific functions without the overhead of a full-time hire.',
     author: 'Fiona Head-Finance',
@@ -799,7 +799,7 @@ export const MOCK_BLOG_POSTS: BlogPost[] = [
 ];
 
 export const MOCK_USER: UserProfile = {
-  id: 'user-1',
+  id: '22222222-2222-2222-2222-222222222222',
   idNumber: 'SKR-12345',
   name: 'Kester Djanie',
   isEmployer: false,
@@ -958,12 +958,13 @@ export const MOCK_USER: UserProfile = {
       isRead: true,
       actionLink: { label: 'Track Application', view: 'seeker-applications' }
     }
-  ]
+  ],
+  pendingAssessmentReminders: []
 };
 
 export const MOCK_APPLICANTS: UserProfile[] = [
   {
-    id: 'applicant-1',
+    id: '22222222-2222-2222-2222-222222222223',
     name: 'Sarah Jenkins',
     email: 'sarah.j@example.com',
     role: 'Senior AI Engineer',
@@ -990,7 +991,7 @@ export const MOCK_APPLICANTS: UserProfile[] = [
     profileImages: ['https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah']
   },
   {
-    id: 'applicant-2',
+    id: '22222222-2222-2222-2222-222222222224',
     name: 'Chen Wei',
     email: 'chen.wei@example.com',
     role: 'Product Designer',
@@ -1017,7 +1018,7 @@ export const MOCK_APPLICANTS: UserProfile[] = [
     profileImages: ['https://api.dicebear.com/7.x/avataaars/svg?seed=Chen']
   },
   {
-    id: 'applicant-3',
+    id: '22222222-2222-2222-2222-222222222225',
     name: 'Kwame Mensah',
     email: 'kwame.m@example.com',
     role: 'Growth Lead',
@@ -1044,7 +1045,7 @@ export const MOCK_APPLICANTS: UserProfile[] = [
     profileImages: ['https://api.dicebear.com/7.x/avataaars/svg?seed=Kwame']
   },
   {
-    id: 'applicant-4',
+    id: '22222222-2222-2222-2222-222222222226',
     name: 'Elena Rodriguez',
     email: 'elena.r@example.com',
     role: 'Cybersecurity Analyst',
@@ -1073,7 +1074,7 @@ export const MOCK_APPLICANTS: UserProfile[] = [
 ];
 
 export const MOCK_EMPLOYER: UserProfile = {
-  id: 'emp-mock-1',
+  id: '22222222-2222-2222-2222-222222222227',
   idNumber: 'CMP-67890',
   name: 'James Miller',
   email: 'hiring@quantify.ai',
@@ -1113,12 +1114,13 @@ export const MOCK_EMPLOYER: UserProfile = {
   subsidiaries: [
     { id: 'subs-1', name: 'Quantify Data Labs', industry: 'Big Data', activeJobs: 3, location: 'Dublin, Ireland', joinedDate: generatePastDate(2000) },
     { id: 'subs-2', name: 'Quantify Neural Robotics', industry: 'Hardware', activeJobs: 1, location: 'Austin, USA', joinedDate: generatePastDate(1000) }
-  ]
+  ],
+  pendingAssessmentReminders: []
 };
 
 export const MOCK_JOBS: Job[] = [
   {
-    id: 'job-1',
+    id: '33333333-3333-3333-3333-333333333333',
     idNumber: 'JOB-001',
     title: 'Lead AI Infrastructure Engineer',
     company: 'Quantify Systems',
@@ -1137,11 +1139,11 @@ export const MOCK_JOBS: Job[] = [
     isPremium: true,
     status: 'active',
     applicationType: 'in-app',
-    aptitudeTestId: 'test-ai-infra',
+    aptitudeTestId: '44444444-4444-4444-4444-444444444444',
     industry: 'Technology & Telecommunication'
   },
   {
-    id: 'job-2',
+    id: '33333333-3333-3333-3333-333333333334',
     idNumber: 'JOB-002',
     title: 'Regional Head of Growth',
     company: 'FinFlow',
@@ -1159,11 +1161,11 @@ export const MOCK_JOBS: Job[] = [
     expiryDate: new Date(now.getTime() + 28 * 24 * 60 * 60 * 1000).toISOString(),
     status: 'active',
     applicationType: 'in-app',
-    aptitudeTestId: 'test-growth',
+    aptitudeTestId: '44444444-4444-4444-4444-444444444445',
     industry: 'Banking & Financial Services'
   },
   {
-    id: 'job-3',
+    id: '33333333-3333-3333-3333-333333333335',
     idNumber: 'JOB-003',
     title: 'Senior Product Designer',
     company: 'Loom Studio',
@@ -1185,7 +1187,7 @@ export const MOCK_JOBS: Job[] = [
     industry: 'Advertising & Marketing'
   },
   {
-    id: 'job-4',
+    id: '33333333-3333-3333-3333-333333333336',
     idNumber: 'JOB-004',
     title: 'Full Stack Developer',
     company: 'Nexus AI',
@@ -1210,8 +1212,8 @@ export const MOCK_JOBS: Job[] = [
 
 export const MOCK_APPLICATIONS: Application[] = [
   {
-    id: 'app-1',
-    jobId: 'job-1',
+    id: '55555555-5555-5555-5555-555555555555',
+    jobId: '33333333-3333-3333-3333-333333333333',
     status: 'applied',
     appliedDate: generatePastDate(2),
     candidateProfile: MOCK_APPLICANTS[0],
@@ -1220,8 +1222,8 @@ export const MOCK_APPLICATIONS: Application[] = [
     ]
   },
   {
-    id: 'app-2',
-    jobId: 'job-3',
+    id: '55555555-5555-5555-5555-555555555556',
+    jobId: '33333333-3333-3333-3333-333333333335',
     status: 'shortlisted',
     appliedDate: generatePastDate(10),
     candidateProfile: MOCK_APPLICANTS[1],
@@ -1232,8 +1234,8 @@ export const MOCK_APPLICATIONS: Application[] = [
     ]
   },
   {
-    id: 'app-3',
-    jobId: 'job-4',
+    id: '55555555-5555-5555-5555-555555555557',
+    jobId: '33333333-3333-3333-3333-333333333336',
     status: 'applied',
     appliedDate: generatePastDate(1),
     candidateProfile: MOCK_USER,
@@ -1242,14 +1244,15 @@ export const MOCK_APPLICATIONS: Application[] = [
     matchReason: 'Exceptional alignment with full-stack requirements and AI integration expertise.',
     statusHistory: [
       { status: 'applied', date: generatePastDate(1) }
-    ]
+    ],
+    reminderSent7d: false
   }
 ];
 
 export const MOCK_APTITUDE_TESTS: AptitudeTest[] = [
   {
-    id: 'test-ai-infra',
-    jobId: 'job-1',
+    id: '44444444-4444-4444-4444-444444444444',
+    jobId: '33333333-3333-3333-3333-333333333333',
     title: 'Neural Infrastructure Scalability Assessment',
     timeLimit: 10,
     createdAt: generatePastDate(120),
@@ -1264,6 +1267,26 @@ export const MOCK_APTITUDE_TESTS: AptitudeTest[] = [
           "Analyze the training checkpoint logs to determine if the halt was necessary before taking action."
         ],
         correctIndex: 2
+      }
+    ]
+  },
+  {
+    id: '44444444-4444-4444-4444-444444444445',
+    jobId: '33333333-3333-3333-3333-333333333334',
+    title: 'Regional Growth Strategy Assessment',
+    timeLimit: 15,
+    createdAt: generatePastDate(60),
+    questions: [
+      {
+        id: 'growth-q1',
+        scenario: "You are entering a new market in West Africa where mobile money is the dominant payment method but your platform currently only supports card payments. What is your first priority?",
+        options: [
+          "Launch with card payments and hope for the best.",
+          "Partner with a local payment aggregator to integrate mobile money.",
+          "Wait until you have a full local team before launching.",
+          "Focus on high-end corporate clients who use cards."
+        ],
+        correctIndex: 1
       }
     ]
   }

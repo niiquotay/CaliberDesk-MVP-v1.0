@@ -51,7 +51,10 @@ create table users (
   "deactivationDate" timestamp with time zone,
   "verificationEmail" text,
   "verificationMethod" text,
-  "verificationDocuments" text[]
+  "verificationDocuments" text[],
+  "pendingAssessmentReminders" jsonb default '[]',
+  "employmentVerificationStatus" text default 'none',
+  "verificationCertificateUrl" text
 );
 
 -- Enable RLS
@@ -119,7 +122,8 @@ create table applications (
   "matchScore" integer,
   "matchReason" text,
   "isAutoApplied" boolean default false,
-  "statusHistory" jsonb default '[]'
+  "statusHistory" jsonb default '[]',
+  "reminderSent7d" boolean default false
 );
 
 -- Aptitude Tests Table

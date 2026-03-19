@@ -25,7 +25,6 @@ import AptitudeTestManager from './components/AptitudeTestManager';
 import AptitudeTestPlayer from './components/AptitudeTestPlayer';
 import OrganizationManagement from './components/OrganizationManagement';
 import ProductsAndServices from './components/ProductsAndServices';
-import ComingSoonLanding from './components/ComingSoonLanding';
 import AuthGate from './components/AuthGate';
 import Background3D from './components/Background3D';
 import WelcomeEmailModal from './components/WelcomeEmailModal';
@@ -36,6 +35,7 @@ import Notifications from './components/Notifications';
 import { analyzeMatch } from './services/geminiService';
 import { Job, ViewType, UserProfile, Application, Transaction, JobAlert, ApplicationStatus, AptitudeTest, SubUser, Subsidiary, AppNotification } from './types';
 import { calculateProfileCompletion } from './utils';
+import { supabase } from './src/lib/supabase';
 import { 
   MOCK_JOBS, ALL_COUNTRIES, MOCK_USER, GLOBAL_TRANSACTIONS, 
   INDUSTRIES, SENIORITY_LEVELS, SALARY_RANGES, JOB_TYPES, 
@@ -152,6 +152,69 @@ const App: React.FC = () => {
   const [showVerificationReminder, setShowVerificationReminder] = useState(false);
   const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
 
+  // Global Error and Gemini Error Listeners
+  useEffect(() => {
+    const handleGeminiError = (event: any) => {
+      const errorMsg = event.detail?.message || "AI processing error.";
+      console.error("Gemini Error Event:", errorMsg);
+      
+      if (errorMsg.includes("Requested entity was not found") || 
+          errorMsg.toLowerCase().includes("origin not allowed") ||
+          errorMsg.toLowerCase().includes("api key not allowed") ||
+          errorMsg.toLowerCase().includes("api_key_invalid")) {
+        setHasApiKey(false);
+        setToast({ 
+          message: "API Key Restriction: Please select a valid key with no origin restrictions.", 
+          type: 'error' 
+        });
+      } else {
+        setToast({ message: errorMsg, type: 'error' });
+      }
+    };
+
+    const handleGlobalError = (event: ErrorEvent) => {
+      const errorMsg = event.message || "";
+      console.error("Global Error Event:", errorMsg);
+      
+      if (errorMsg.includes("Requested entity was not found") || 
+          errorMsg.toLowerCase().includes("origin not allowed") ||
+          errorMsg.toLowerCase().includes("api key not allowed") ||
+          errorMsg.toLowerCase().includes("api_key_invalid")) {
+        setHasApiKey(false);
+        setToast({ 
+          message: "API Key Restriction: Please select a valid key with no origin restrictions.", 
+          type: 'error' 
+        });
+      }
+    };
+
+    const handleRejection = (event: PromiseRejectionEvent) => {
+      const reason = event.reason;
+      let errorMsg = reason instanceof Error ? reason.message : String(reason);
+      
+      if (errorMsg.includes("Requested entity was not found") || 
+          errorMsg.toLowerCase().includes("origin not allowed") ||
+          errorMsg.toLowerCase().includes("api key not allowed") ||
+          errorMsg.toLowerCase().includes("api_key_invalid")) {
+        setHasApiKey(false);
+        setToast({ 
+          message: "API Key Restriction: Please select a valid key with no origin restrictions.", 
+          type: 'error' 
+        });
+      }
+    };
+
+    window.addEventListener('gemini-error', handleGeminiError);
+    window.addEventListener('error', handleGlobalError);
+    window.addEventListener('unhandledrejection', handleRejection);
+
+    return () => {
+      window.removeEventListener('gemini-error', handleGeminiError);
+      window.removeEventListener('error', handleGlobalError);
+      window.removeEventListener('unhandledrejection', handleRejection);
+    };
+  }, []);
+
   useEffect(() => {
     const handlePopState = () => {
       if (window.location.pathname === '/admin' || window.location.pathname === '/staff-login') {
@@ -173,6 +236,40 @@ const App: React.FC = () => {
   }, [user]);
 
   useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' && session) {
+        // Sync with our backend to get the full user profile and set the JWT cookie
+        try {
+          const response = await fetch('/api/auth/sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ access_token: session.access_token })
+          });
+          
+          if (response.ok) {
+            const userData = await response.json();
+            setUser(userData);
+            
+            // If we're on a sign-in page, move to home or admin
+            if (window.location.pathname === '/admin' || window.location.pathname === '/staff-login') {
+              setView('admin');
+            } else if (view === 'signin') {
+              setView('home');
+            }
+          }
+        } catch (err) {
+          console.error("Auth sync error:", err);
+        }
+      } else if (event === 'SIGNED_OUT') {
+        setUser(INITIAL_GUEST);
+        setView('home');
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [view]);
+
+  useEffect(() => {
     const fetchInitialData = async () => {
       try {
         const [jobsRes, appsRes, testsRes] = await Promise.all([
@@ -181,6 +278,14 @@ const App: React.FC = () => {
           fetch('/api/aptitude-tests')
         ]);
         
+        // Handle unauthorized access
+        if (appsRes.status === 401 || appsRes.status === 403) {
+          console.warn("[AUTH] Session expired or unauthorized. Resetting guest mode.");
+          setUser(INITIAL_GUEST);
+          // Don't auto-redirect to signin here to avoid interrupting guest browsing
+          return;
+        }
+
         if (jobsRes.ok) {
           const jobsData = await jobsRes.json();
           setJobs(jobsData);
@@ -227,79 +332,6 @@ const App: React.FC = () => {
       }
     };
     checkKey();
-    
-    // Listen for errors that might indicate an invalid key
-    const handleError = (event: ErrorEvent) => {
-      const errorMsg = event.message || "";
-      console.error("Global Error Event:", errorMsg);
-      
-      if (errorMsg.includes("Requested entity was not found") || 
-          errorMsg.toLowerCase().includes("origin not allowed") ||
-          errorMsg.toLowerCase().includes("api key not allowed") ||
-          errorMsg.toLowerCase().includes("api_key_invalid")) {
-        setHasApiKey(false);
-        setToast({ 
-          message: "API Key Restriction: Please select a valid key with no origin restrictions.", 
-          type: 'error' 
-        });
-      }
-    };
-
-    const handleGeminiError = (event: any) => {
-      const errorMsg = event.detail?.message || "";
-      console.error("Gemini Error Event:", errorMsg);
-      
-      if (errorMsg.includes("Requested entity was not found") || 
-          errorMsg.toLowerCase().includes("origin not allowed") ||
-          errorMsg.toLowerCase().includes("api key not allowed")) {
-        setHasApiKey(false);
-        setToast({ 
-          message: "API Key Restriction: The selected key is not allowed for this origin. Please select a different key.", 
-          type: 'error' 
-        });
-      }
-    };
-
-    const handleRejection = (event: PromiseRejectionEvent) => {
-      event.preventDefault();
-      const reason = event.reason;
-      let errorMsg = "Unknown Promise Rejection";
-      
-      if (reason instanceof Error) {
-        errorMsg = reason.message || "Empty Error Message";
-      } else if (typeof reason === 'string') {
-        errorMsg = reason || "Empty String Rejection";
-      } else if (reason) {
-        try {
-          errorMsg = JSON.stringify(reason);
-          if (errorMsg === '{}') errorMsg = "Empty Object Rejection";
-        } catch (e) {
-          errorMsg = String(reason);
-        }
-      } else {
-        errorMsg = "Undefined/Null Rejection";
-      }
-      
-      if (errorMsg.includes("Requested entity was not found") || 
-          errorMsg.toLowerCase().includes("origin not allowed") ||
-          errorMsg.toLowerCase().includes("api key not allowed") ||
-          errorMsg.toLowerCase().includes("api_key_invalid")) {
-        setHasApiKey(false);
-        setToast({ 
-          message: "API Key Restriction: The current key is not allowed for this origin. Please select a valid key.", 
-          type: 'error' 
-        });
-      }
-    };
-
-    window.addEventListener('error', handleError);
-    window.addEventListener('unhandledrejection', handleRejection);
-    window.addEventListener('gemini-error', handleGeminiError);
-    return () => {
-      window.removeEventListener('error', handleError);
-      window.removeEventListener('unhandledrejection', handleRejection);
-      window.removeEventListener('gemini-error', handleGeminiError);
-    };
   }, []);
 
   const handleSelectKey = async () => {
@@ -397,11 +429,34 @@ const App: React.FC = () => {
                 addNotification({
                   title: 'Assessment Required',
                   message: assessmentMsg,
-                  type: 'in-app',
+                  type: 'both',
                   category: 'application',
                   actionLink: { label: 'Take Assessment', view: 'job-details', params: updatedJob }
                 });
                 console.log(`[NOTIFICATION] To: ${user.email}, Message: ${assessmentMsg}`);
+                console.log(`[EMAIL] To: ${user.email}, Subject: Assessment Required - CaliberDesk, Body: ${assessmentMsg}`);
+                
+                // Track for reminders
+                const newReminder: PendingAssessmentReminder = {
+                  jobId: updatedJob.id,
+                  matchedAt: new Date().toISOString(),
+                  remindersSent: 0
+                };
+                
+                setUser(prev => ({
+                  ...prev,
+                  pendingAssessmentReminders: [...(prev.pendingAssessmentReminders || []), newReminder]
+                }));
+
+                // Persist to backend
+                fetch('/api/user/profile', {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ 
+                    pendingAssessmentReminders: [...(user.pendingAssessmentReminders || []), newReminder] 
+                  })
+                }).catch(err => console.error("Failed to persist pending reminder:", err));
+
               } else {
                 const newApp: Application = {
                   id: Math.random().toString(36).substr(2, 9),
@@ -563,6 +618,53 @@ const App: React.FC = () => {
   }, [jobs]);
 
   useEffect(() => {
+    const checkJobExpiries = () => {
+      if (!user.email || user.isEmployer) return;
+
+      const now = new Date();
+      const fortyEightHoursLater = new Date(now.getTime() + 48 * 60 * 60 * 1000);
+
+      applications.forEach(app => {
+        const job = jobs.find(j => j.id === app.jobId);
+        if (job && job.expiryDate && job.status === 'active') {
+          const expiry = new Date(job.expiryDate);
+          if (expiry > now && expiry <= fortyEightHoursLater) {
+            // Check if we already notified for this job in this session
+            const storageKey = `expiry_notif_${app.id}`;
+            const lastNotified = localStorage.getItem(storageKey);
+            
+            if (!lastNotified) {
+              const msg = `Attention: The job "${job.title}" at ${job.company} is expiring soon!`;
+              setToast({ message: msg, type: 'info' });
+              
+              // Also add to in-app notifications if not already there
+              const alreadyInNotifs = user.notifications?.some(n => 
+                n.title === 'Job Expiry Warning' && n.message.includes(job.title)
+              );
+              
+              if (!alreadyInNotifs) {
+                addNotification({
+                  title: 'Job Expiry Warning',
+                  message: `The job "${job.title}" at ${job.company} you applied to is expiring soon (on ${expiry.toLocaleDateString()}).`,
+                  type: 'both',
+                  category: 'application',
+                  actionLink: { label: 'View Job', view: 'job-details', params: job }
+                });
+              }
+              
+              localStorage.setItem(storageKey, now.toISOString());
+            }
+          }
+        }
+      });
+    };
+
+    const interval = setInterval(checkJobExpiries, 1000 * 60 * 60); // Check every hour
+    checkJobExpiries();
+    return () => clearInterval(interval);
+  }, [user.email, user.isEmployer, jobs, applications, user.notifications]);
+
+  useEffect(() => {
     if (view === 'home' && window.location.pathname !== '/') {
       window.history.pushState({}, '', '/');
     } else if (view === 'signin') {
@@ -659,6 +761,36 @@ const App: React.FC = () => {
       }
     } catch (err) {
       setToast({ message: "Verification failed", type: "error" });
+    }
+  };
+
+  const handleVerifyEmployment = async (userId: string, workIndex: number) => {
+    try {
+      const response = await fetch('/api/admin/verify-employment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, workIndex, isVerified: true })
+      });
+      if (response.ok) {
+        setAllUsers(prev => prev.map(u => {
+          if (u.id === userId && u.workHistory) {
+            const newHistory = [...u.workHistory];
+            newHistory[workIndex] = { ...newHistory[workIndex], isVerified: true };
+            
+            // Check if all are verified to update overall status
+            const allVerified = newHistory.every(w => w.isVerified);
+            return { 
+              ...u, 
+              workHistory: newHistory,
+              employmentVerificationStatus: allVerified ? 'completed' : u.employmentVerificationStatus
+            };
+          }
+          return u;
+        }));
+        setToast({ message: "Employment verified successfully", type: 'success' });
+      }
+    } catch (err) {
+      setToast({ message: "Failed to verify employment", type: 'error' });
     }
   };
 
@@ -980,7 +1112,7 @@ const App: React.FC = () => {
       setBlogCategory(null);
     }
     
-    const publicViews = ['home', 'seeker', 'signin', 'hrm-landing', 'payroll-landing', 'vendor-landing', 'about-caliberdesk'];
+    const publicViews = ['home', 'seeker', 'signin', 'about-caliberdesk'];
     
     if (targetView === 'employer-post-job') {
       if (!requireAuth("post job vacancies", 'employer')) return;
@@ -1562,11 +1694,7 @@ const App: React.FC = () => {
         )}
         {view === 'services' && !isDetailActive && <ProductsAndServices user={user} onUpgradeRequest={() => { setToast({ message: "All features currently active (Free Tier)", type: 'info' }) }} />}
         
-        {view === 'hrm-landing' && <ComingSoonLanding module="hrm" onBack={() => setView('home')} />}
-        {view === 'payroll-landing' && <ComingSoonLanding module="payroll" onBack={() => setView('home')} />}
-        {view === 'vendor-landing' && <ComingSoonLanding module="vendor" onBack={() => setView('home')} />}
-
-        {view === 'admin' && !isDetailActive && <AdminDashboard user={user} jobs={jobs} applications={applications} transactions={GLOBAL_TRANSACTIONS} onBack={() => setView('home')} pendingVerifications={pendingVerifications} allUsers={allUsers} onVerifyEmployer={handleVerifyEmployer} onApproveJob={() => {}} onUpdateApplicationStatus={handleUpdateApplicationStatus} onUpdateApplicationDueDate={handleUpdateApplicationDueDate} onUpdateJobStatus={handleUpdateJobStatus} onDeleteJob={handleDeleteJob} onPostJob={handlePostJob} onNavigateToBlog={() => setView('blog')} onSelectJob={handleSelectDetailedJob} />}
+        {view === 'admin' && !isDetailActive && <AdminDashboard user={user} jobs={jobs} applications={applications} transactions={GLOBAL_TRANSACTIONS} onBack={() => setView('home')} pendingVerifications={pendingVerifications} allUsers={allUsers} onVerifyEmployer={handleVerifyEmployer} onVerifyEmployment={handleVerifyEmployment} onApproveJob={() => {}} onUpdateApplicationStatus={handleUpdateApplicationStatus} onUpdateApplicationDueDate={handleUpdateApplicationDueDate} onUpdateJobStatus={handleUpdateJobStatus} onDeleteJob={handleDeleteJob} onPostJob={handlePostJob} onNavigateToBlog={() => setView('blog')} onSelectJob={handleSelectDetailedJob} />}
         {view === 'admin-jobs' && !isDetailActive && (
           <JobManagement
             jobs={jobs}
@@ -1584,7 +1712,7 @@ const App: React.FC = () => {
             onNavigateToBlog={() => setView('blog')}
           />
         )}
-        {view === 'admin-staff' && !isDetailActive && <AdminDashboard user={user} jobs={jobs} applications={applications} transactions={GLOBAL_TRANSACTIONS} onBack={() => setView('home')} pendingVerifications={pendingVerifications} allUsers={allUsers} onVerifyEmployer={handleVerifyEmployer} onApproveJob={() => {}} onUpdateApplicationStatus={handleUpdateApplicationStatus} onUpdateApplicationDueDate={handleUpdateApplicationDueDate} onUpdateJobStatus={handleUpdateJobStatus} onDeleteJob={handleDeleteJob} onPostJob={handlePostJob} onNavigateToBlog={() => setView('blog')} onSelectJob={handleSelectDetailedJob} initialTab="staff" />}
+        {view === 'admin-staff' && !isDetailActive && <AdminDashboard user={user} jobs={jobs} applications={applications} transactions={GLOBAL_TRANSACTIONS} onBack={() => setView('home')} pendingVerifications={pendingVerifications} allUsers={allUsers} onVerifyEmployer={handleVerifyEmployer} onVerifyEmployment={handleVerifyEmployment} onApproveJob={() => {}} onUpdateApplicationStatus={handleUpdateApplicationStatus} onUpdateApplicationDueDate={handleUpdateApplicationDueDate} onUpdateJobStatus={handleUpdateJobStatus} onDeleteJob={handleDeleteJob} onPostJob={handlePostJob} onNavigateToBlog={() => setView('blog')} onSelectJob={handleSelectDetailedJob} initialTab="staff" />}
         {view === 'profile' && !isDetailActive && (() => {
           const params = new URLSearchParams(window.location.search);
           const appId = params.get('appId');

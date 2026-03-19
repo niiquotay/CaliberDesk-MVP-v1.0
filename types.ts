@@ -6,6 +6,7 @@ export interface WorkExperience {
   endYear?: string;
   period: string;
   description: string;
+  isVerified?: boolean;
 }
 
 export interface Education {
@@ -87,6 +88,7 @@ export interface Application {
   proposedStatus?: ApplicationStatus;
   dueDate?: string;
   statusHistory?: StatusHistoryEntry[];
+  reminderSent7d?: boolean;
 }
 
 export interface AptitudeQuestion {
@@ -259,6 +261,12 @@ export interface AppNotification {
   };
 }
 
+export interface PendingAssessmentReminder {
+  jobId: string;
+  matchedAt: string;
+  remindersSent: number; // 0: initial, 1: 24h, 2: 36h, 3: 72h
+}
+
 export interface UserProfile {
   id?: string;
   idNumber?: string;
@@ -367,6 +375,9 @@ export interface UserProfile {
   };
   joinedDate?: string;
   notifications?: AppNotification[];
+  pendingAssessmentReminders?: PendingAssessmentReminder[];
+  employmentVerificationStatus?: 'none' | 'pending' | 'completed';
+  verificationCertificateUrl?: string;
 }
 
 export interface Ticket {
@@ -404,9 +415,6 @@ export type ViewType =
   | 'employer-aptitude'
   | 'employer-org'
   | 'services'
-  | 'hrm-landing'
-  | 'payroll-landing'
-  | 'vendor-landing'
   | 'about-caliberdesk'
   | 'blog'
   | 'notifications'

@@ -34,6 +34,7 @@ interface AdminDashboardProps {
   onPostJob?: (job: any) => void;
   onNavigateToBlog?: () => void;
   onSelectJob?: (job: Job) => void;
+  onVerifyEmployment?: (userId: string, workIndex: number) => void;
   initialTab?: string;
   allUsers: UserProfile[];
 }
@@ -64,6 +65,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onPostJob,
   onNavigateToBlog,
   onSelectJob,
+  onVerifyEmployment,
   initialTab,
   allUsers
 }) => {
@@ -136,7 +138,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
       base.push({ id: 'oversight', label: 'Hiring oversight', icon: FileSearch });
     }
     if (opRole.includes('cs') || opRole === 'super_admin') {
-      base.push({ id: 'verifications', label: 'Verifications', icon: ShieldCheck });
+      base.push({ id: 'verifications', label: 'Employer Verifications', icon: ShieldCheck });
+      base.push({ id: 'employment_verifications', label: 'Employment Verifications', icon: ClipboardCheck });
       base.push({ id: 'tickets', label: 'Service desk', icon: TicketIcon });
     }
     if (opRole.includes('finance') || opRole === 'super_admin') {
@@ -581,6 +584,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
         <VerificationTable accounts={pendingVerifications} onVerify={onVerifyEmployer} />
       )}
 
+      {viewTab === 'employment_verifications' && (
+        <EmploymentVerificationTable users={allUsers.filter(u => u.employmentVerificationStatus === 'pending' || u.employmentVerificationStatus === 'completed')} onVerify={onVerifyEmployment} />
+      )}
+
       {viewTab === 'oversight' && (
         <OversightTable jobs={jobs.filter(j => j.status === 'pending_approval')} onApprove={onApproveJob} />
       )}
@@ -794,6 +801,75 @@ const VerificationTable = ({ accounts, onVerify }: any) => (
               </td>
             </tr>
           ))}
+        </tbody>
+      </table>
+    </div>
+  </div>
+);
+
+const EmploymentVerificationTable = ({ users, onVerify }: any) => (
+  <div className="glass-premium rounded-2xl border border-white/5 overflow-hidden shadow-sm animate-in slide-in-from-bottom-4 duration-500">
+    <div className="p-6 border-b border-white/5 bg-white/5">
+      <h3 className="text-xs font-black uppercase tracking-widest text-white">Employment history verification queue</h3>
+      <p className="text-[9px] font-black uppercase tracking-[0.2em] text-white/40 mt-0.5">Verify seeker work history after service purchase.</p>
+    </div>
+    <div className="overflow-x-auto">
+      <table className="w-full text-left">
+        <thead className="bg-white/5 text-[8px] font-black uppercase tracking-[0.25em] text-white/50 border-b border-white/5">
+          <tr>
+            <th className="px-6 py-4">Seeker</th>
+            <th className="px-6 py-4">Work Experience to Verify</th>
+            <th className="px-6 py-4 text-right">Action</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-white/5 text-[10px] font-medium">
+          {users.map((u: any) => (
+            <React.Fragment key={u.id}>
+              {u.workHistory?.map((work: any, idx: number) => (
+                <tr key={`${u.id}-${idx}`} className="hover:bg-white/5 transition-colors">
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-white/5 overflow-hidden border border-white/10">
+                        <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${u.name}`} alt="" referrerPolicy="no-referrer" />
+                      </div>
+                      <div>
+                        <p className="font-black text-white">{u.name}</p>
+                        <p className="text-[8px] text-white/20 uppercase font-black">{u.email}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="space-y-1">
+                      <p className="font-black text-white">{work.role}</p>
+                      <p className="text-[8px] text-[#F0C927] font-black uppercase tracking-widest">{work.company}</p>
+                      <p className="text-[8px] text-white/40 uppercase">{work.period || `${work.startYear} - ${work.endYear}`}</p>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 text-right">
+                    {work.isVerified ? (
+                      <span className="px-3 py-1.5 bg-[#41d599]/10 text-[#41d599] text-[8px] font-black uppercase tracking-widest rounded-lg border border-[#41d599]/20">
+                        Verified
+                      </span>
+                    ) : (
+                      <button 
+                        onClick={() => onVerify(u.id, idx)}
+                        className="px-4 py-2 bg-[#F0C927] text-[#0a4179] text-[8px] font-black uppercase tracking-widest rounded-lg shadow-lg hover:scale-105 transition-all"
+                      >
+                        Mark Verified
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </React.Fragment>
+          ))}
+          {users.length === 0 && (
+            <tr>
+              <td colSpan={3} className="px-6 py-12 text-center text-white/20 font-black uppercase tracking-widest text-xs">
+                No pending employment verifications
+              </td>
+            </tr>
+          )}
         </tbody>
       </table>
     </div>

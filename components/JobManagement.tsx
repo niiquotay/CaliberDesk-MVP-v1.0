@@ -302,6 +302,31 @@ const JobManagement: React.FC<JobManagementProps> = ({
     },
   );
 
+  const VerificationBadge = ({ isVerified, status, size = 16, showLabel = true }: { isVerified?: boolean, status?: 'none' | 'pending' | 'completed', size?: number, showLabel?: boolean }) => {
+    const isActive = isVerified || status === 'completed';
+    const isPending = status === 'pending';
+
+    if (!isActive && !isPending && status !== 'none') return null;
+    if (status === 'none' && !isVerified) return null;
+
+    return (
+      <div 
+        className={`
+          flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-black text-[9px] uppercase tracking-widest transition-all duration-300 border
+          ${isActive 
+            ? 'bg-[#F0C927] text-[#0a4179] border-[#F0C927] hover:bg-[#41d599] hover:text-white hover:border-[#41d599] cursor-help shadow-lg' 
+            : isPending
+              ? 'bg-white/5 text-white/40 border-white/10'
+              : 'bg-white/5 text-white/20 border-white/5 opacity-50'}
+        `}
+        title={isActive ? "Verified Employment" : isPending ? "Verification in Progress" : "Not Verified"}
+      >
+        <ShieldCheck size={size} />
+        {showLabel && <span>{isActive ? 'Verified' : isPending ? 'Pending' : 'Unverified'}</span>}
+      </div>
+    );
+  };
+
   useEffect(() => {
     if (newJob.country) {
       const match = GLOBAL_CURRENCIES.find((c) =>
@@ -2325,9 +2350,12 @@ const JobManagement: React.FC<JobManagementProps> = ({
                   />
                 </div>
                 <div>
-                  <h3 className="text-xl font-black text-white uppercase tracking-tight">
-                    {reviewingApplicant.candidateProfile?.name}
-                  </h3>
+                  <div className="flex items-center gap-3">
+                    <h3 className="text-xl font-black text-white uppercase tracking-tight">
+                      {reviewingApplicant.candidateProfile?.name}
+                    </h3>
+                    <VerificationBadge status={reviewingApplicant.candidateProfile?.employmentVerificationStatus} size={14} />
+                  </div>
                   <div className="flex items-center gap-3 mt-1">
                     <p className="text-[10px] text-white/30 font-black uppercase tracking-[0.3em]">
                       REF: {reviewingApplicant.id}
@@ -2394,9 +2422,12 @@ const JobManagement: React.FC<JobManagementProps> = ({
                         >
                           <div className="flex justify-between items-start">
                             <div className="space-y-0.5">
-                              <h5 className="font-black text-sm group-hover/h:text-[#F0C927] transition-colors">
-                                {work.role}
-                              </h5>
+                              <div className="flex items-center gap-3">
+                                <h5 className="font-black text-sm group-hover/h:text-[#F0C927] transition-colors">
+                                  {work.role}
+                                </h5>
+                                <VerificationBadge isVerified={work.isVerified} status={reviewingApplicant.candidateProfile?.employmentVerificationStatus} showLabel={false} />
+                              </div>
                               <p className="text-[10px] font-bold text-white/40 uppercase tracking-tight">
                                 {work.company}
                               </p>

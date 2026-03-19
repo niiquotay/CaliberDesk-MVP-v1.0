@@ -46,6 +46,65 @@ const Profile: React.FC<ProfileProps> = ({ user, setUser, jobs = [], onBack }) =
   const cvUploadRef = useRef<HTMLInputElement>(null);
   const imageUploadRef = useRef<HTMLInputElement>(null);
 
+  const [isPurchasing, setIsPurchasing] = useState(false);
+
+  const handlePurchaseVerification = async () => {
+    setIsPurchasing(true);
+    try {
+      const response = await fetch('/api/user/purchase-verification', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      
+      if (!response.ok) throw new Error('Purchase failed');
+      
+      const data = await response.json();
+      setUser(prev => ({
+        ...prev,
+        employmentVerificationStatus: 'pending',
+        purchaseHistory: [...(prev.purchaseHistory || []), {
+          id: Math.random().toString(36).substr(2, 9),
+          item: 'Employment History Verification Service',
+          amount: 49.99,
+          date: new Date().toISOString()
+        }]
+      }));
+      setToast({ message: "Verification service purchased. Our team will begin outreach.", type: 'success' });
+    } catch (err) {
+      setToast({ message: "Failed to initiate purchase.", type: 'error' });
+    } finally {
+      setIsPurchasing(false);
+    }
+  };
+
+  const VerificationBadge = ({ isVerified, status, size = 16, showLabel = true }: { isVerified?: boolean, status?: 'none' | 'pending' | 'completed', size?: number, showLabel?: boolean }) => {
+    const isActive = isVerified || status === 'completed';
+    const isPending = status === 'pending';
+
+    if (!isActive && !isPending && status !== 'none') return null;
+    if (status === 'none' && !isVerified) return null;
+
+    return (
+      <div 
+        className={`
+          flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-black text-[9px] uppercase tracking-widest transition-all duration-300 border
+          ${isActive 
+            ? 'bg-[#F0C927] text-[#0a4179] border-[#F0C927] hover:bg-[#41d599] hover:text-white hover:border-[#41d599] cursor-help shadow-lg' 
+            : isPending
+              ? 'bg-white/5 text-white/40 border-white/10'
+              : 'bg-white/5 text-white/20 border-white/5 opacity-50'}
+        `}
+        title={isActive ? "Verified Employment" : isPending ? "Verification in Progress" : "Not Verified"}
+      >
+        <ShieldCheck size={size} />
+        {showLabel && <span>{isActive ? 'Verified' : isPending ? 'Pending' : 'Unverified'}</span>}
+      </div>
+    );
+  };
+
   const handleAnalyzeSkills = async () => {
     if (!jobs || jobs.length === 0) {
       setToast({ message: "No saved jobs to analyze against.", type: 'info' });
@@ -139,9 +198,7 @@ const Profile: React.FC<ProfileProps> = ({ user, setUser, jobs = [], onBack }) =
                      <h1 className="text-2xl md:text-4xl font-black tracking-tight leading-none uppercase font-montserrat text-white">
                         {user.name}
                      </h1>
-                     <div className="text-[#41d599]">
-                        <ShieldCheck size={24} />
-                     </div>
+                     <VerificationBadge status={user.employmentVerificationStatus} size={20} />
                      {user.idNumber && (
                         <div className="px-3 py-1 rounded-xl bg-[#F0C927]/10 border border-[#F0C927]/20 text-[10px] font-black tracking-widest text-[#F0C927]">
                           ID: {user.idNumber}
@@ -589,14 +646,36 @@ const Profile: React.FC<ProfileProps> = ({ user, setUser, jobs = [], onBack }) =
                   <h3 className="text-[10px] font-black uppercase tracking-widest flex items-center gap-3 text-[#F0C927]">
                      <History size={18} /> Career Trajectory
                   </h3>
-                  {!isReadOnly && (
-                    <button 
-                       onClick={() => setUser(p => ({...p, workHistory: [{ role: '', company: '', startYear: '', endYear: '', description: '', period: '' }, ...p.workHistory]}))} 
-                       className="p-2 rounded-xl bg-[#F0C927]/10 text-[#F0C927] hover:bg-[#F0C927]/20 transition-all"
-                    >
-                       <Plus size={18} />
-                    </button>
-                  )}
+                  <div className="flex items-center gap-3">
+                    {user.employmentVerificationStatus === 'none' && !isReadOnly && (
+                      <button 
+                        onClick={handlePurchaseVerification}
+                        disabled={isPurchasing}
+                        className="px-4 py-2 bg-[#F0C927] text-[#0a4179] rounded-xl text-[9px] font-black uppercase tracking-widest hover:brightness-110 active:scale-95 transition-all flex items-center gap-2"
+                      >
+                        {isPurchasing ? <Loader2 size={12} className="animate-spin" /> : <ShieldCheck size={12} />}
+                        Verify History
+                      </button>
+                    )}
+                    {user.employmentVerificationStatus === 'completed' && user.verificationCertificateUrl && (
+                      <a 
+                        href={user.verificationCertificateUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-4 py-2 bg-[#41d599] text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:brightness-110 active:scale-95 transition-all flex items-center gap-2"
+                      >
+                        <Download size={12} /> Certificate
+                      </a>
+                    )}
+                    {!isReadOnly && (
+                      <button 
+                         onClick={() => setUser(p => ({...p, workHistory: [{ role: '', company: '', startYear: '', endYear: '', description: '', period: '' }, ...p.workHistory]}))} 
+                         className="p-2 rounded-xl bg-[#F0C927]/10 text-[#F0C927] hover:bg-[#F0C927]/20 transition-all"
+                      >
+                         <Plus size={18} />
+                      </button>
+                    )}
+                  </div>
                </div>
                <div className="space-y-6">
                   {user.workHistory.map((work, i) => (
@@ -611,7 +690,10 @@ const Profile: React.FC<ProfileProps> = ({ user, setUser, jobs = [], onBack }) =
                        )}
                        <div className="grid md:grid-cols-2 gap-6">
                           <div className="space-y-2">
-                             <label className="text-[9px] font-black uppercase text-white/20 ml-1">Role</label>
+                             <div className="flex items-center justify-between">
+                               <label className="text-[9px] font-black uppercase text-white/20 ml-1">Role</label>
+                               <VerificationBadge isVerified={work.isVerified} status={user.employmentVerificationStatus} showLabel={false} />
+                             </div>
                              <input 
                                 value={work.role} 
                                 onChange={e => !isReadOnly && setUser(p => ({...p, workHistory: p.workHistory.map((w, idx) => idx === i ? {...w, role: e.target.value} : w)}))} 

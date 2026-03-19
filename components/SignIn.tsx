@@ -7,6 +7,7 @@ import {
 import { UserProfile, OperationalRole } from '../types';
 import { MOCK_USER, MOCK_EMPLOYER, STAFF_ACCOUNTS, ALL_COUNTRIES } from '../constants';
 import { validatePhoneNumber } from '../utils';
+import { supabase } from '../src/lib/supabase';
 
 interface SignInProps {
   onSignIn: (user: UserProfile) => void;
@@ -246,6 +247,17 @@ const SignIn: React.FC<SignInProps> = ({ onSignIn, onBack, initialIsEmployer = f
     setError(null);
     
     try {
+      if (provider === 'Google') {
+        const { error } = await supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            redirectTo: window.location.origin,
+          },
+        });
+        if (error) throw error;
+        return; // Redirecting...
+      }
+
       const response = await fetch(`/api/auth/${provider.toLowerCase()}/url?isEmployer=${isEmployer}`);
       if (!response.ok) throw new Error(`Failed to get ${provider} auth URL`);
       
