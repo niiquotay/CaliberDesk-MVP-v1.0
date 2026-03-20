@@ -615,7 +615,7 @@ export const STAFF_ACCOUNTS: Record<OperationalRole, UserProfile> = {
   super_admin: {
     name: 'Master Admin',
     idNumber: 'USR-0001',
-    email: 'admin@caliberdesk.ai',
+    email: 'admin@caliberdesk.com',
     isAdmin: true,
     opRole: 'super_admin',
     role: 'System Architect',
@@ -1205,7 +1205,8 @@ export const MOCK_JOBS: Job[] = [
     expiryDate: new Date(now.getTime() + 40 * 24 * 60 * 60 * 1000).toISOString(),
     isQuickHire: true,
     status: 'active',
-    applicationType: 'in-app',
+    applicationType: 'external',
+    externalApplyUrl: 'https://nexusai.com/careers/apply',
     industry: 'Technology & Telecommunication'
   }
 ];

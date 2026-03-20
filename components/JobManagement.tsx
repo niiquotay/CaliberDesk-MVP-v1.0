@@ -2212,6 +2212,11 @@ const JobManagement: React.FC<JobManagementProps> = ({
                           <p className="text-base font-bold uppercase text-blue-900">
                             {newJob.applicationType === "in-app" ? "In-App" : "External"}
                           </p>
+                          {newJob.applicationType === "external" && (
+                            <p className="text-[10px] font-bold text-blue-600 truncate max-w-[200px]">
+                              {newJob.externalApplyUrl}
+                            </p>
+                          )}
                         </div>
                         {newJob.allowedCountries?.[0] === "Specific Country Only" && deploymentManifest.length > 0 && (
                           <div className="col-span-full space-y-2 pt-6 border-t border-blue-50">

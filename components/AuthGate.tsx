@@ -118,11 +118,13 @@ const AuthGate: React.FC<AuthGateProps> = ({ initialRole = 'seeker', onSelectSee
     setError(null);
     
     try {
+      const redirectTo = `${window.location.origin}/signin?role=${role}`;
+      
       if (provider === 'Google') {
         const { error } = await supabase.auth.signInWithOAuth({
           provider: 'google',
           options: {
-            redirectTo: window.location.origin,
+            redirectTo,
           },
         });
         if (error) throw error;
@@ -133,7 +135,7 @@ const AuthGate: React.FC<AuthGateProps> = ({ initialRole = 'seeker', onSelectSee
         const { error } = await supabase.auth.signInWithOAuth({
           provider: 'linkedin_oidc',
           options: {
-            redirectTo: window.location.origin,
+            redirectTo,
           },
         });
         if (error) throw error;

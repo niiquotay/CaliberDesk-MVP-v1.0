@@ -228,7 +228,7 @@ const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ user, onComplete })
               <Zap size={18} className="text-[#41d599] shrink-0 mt-1" />
               <div className="space-y-1">
                 <p className="text-[10px] font-black uppercase tracking-widest text-[#41d599]">Pro Tip: Auto-Apply</p>
-                <p className="text-[9px] text-white/40 leading-relaxed font-bold">You can enable Auto-Apply in your settings later to let our AI apply to matching jobs automatically.</p>
+                <p className="text-[9px] text-white/40 leading-relaxed font-bold">You can enable Auto-Apply in your settings later to let our AI apply to matching jobs automatically (excludes external sites).</p>
               </div>
             </div>
           </div>

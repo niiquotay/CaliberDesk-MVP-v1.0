@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
@@ -101,6 +102,45 @@ async function startServer() {
     const random = Math.floor(10000 + Math.random() * 90000);
     return `${prefix}-${random}`;
   };
+
+  // Helper to filter objects to only include valid keys for a table
+  const filterObject = (obj: any, validKeys: string[]) => {
+    const filtered: any = {};
+    validKeys.forEach(key => {
+      if (key in obj && obj[key] !== undefined && obj[key] !== null) {
+        filtered[key] = obj[key];
+      }
+    });
+    return filtered;
+  };
+
+  const USER_TABLE_KEYS = [
+    'id', 'email', 'password', 'name', 'firstName', 'middleName', 'lastName', 'phoneNumbers',
+    'isEmployer', 'isVerified', 'joinedDate', 'companyName', 'isSuperUser', 'idNumber',
+    'role', 'city', 'country', 'skills', 'digitalSkills', 'certifications', 'hobbies',
+    'projects', 'experienceSummary', 'profileCompleted', 'linkedInConnected', 'isSubscribed',
+    'subscriptionTier', 'purchaseHistory', 'adOptIn', 'alerts', 'savedJobIds', 'autoApplyEnabled',
+    'profileImages', 'workHistory', 'education', 'stealthMode', 'notifications', 'subUsers',
+    'isAdmin', 'opRole', 'isDeactivated', 'deactivationDate', 'verificationEmail',
+    'verificationMethod', 'verificationDocuments', 'pendingAssessmentReminders',
+    'employmentVerificationStatus', 'verificationCertificateUrl'
+  ];
+
+  const JOB_TABLE_KEYS = [
+    'id', 'idNumber', 'title', 'company', 'city', 'country', 'location', 'category',
+    'allowedCountries', 'salary', 'description', 'responsibilities', 'requirements',
+    'tags', 'benefits', 'postedAt', 'expiryDate', 'isPremium', 'isQuickHire', 'status',
+    'applicationType', 'externalApplyUrl', 'industry', 'postedBy', 'aptitudeTestId'
+  ];
+
+  const BLOG_POST_TABLE_KEYS = [
+    'id', 'title', 'content', 'author', 'authorRole', 'publishedAt', 'imageUrl',
+    'videoUrl', 'tags', 'readTime', 'isDraft'
+  ];
+
+  const APTITUDE_TEST_TABLE_KEYS = [
+    'id', 'jobId', 'title', 'questions', 'timeLimit', 'createdAt', 'difficulty'
+  ];
 
   // Helper to send in-app notifications to staff
   const notifyStaff = async (title: string, message: string, actionLink?: any) => {
@@ -475,19 +515,48 @@ async function startServer() {
     }
 
     if (userCount === 0) {
+      console.log("[SYSTEM] Seeding mock users...");
       const mockUsers = [
-        { ...MOCK_USER, idNumber: generateIdNumber('SKR'), password: "user123", joinedDate: new Date().toISOString(), isVerified: true },
-        { ...MOCK_EMPLOYER, idNumber: generateIdNumber('CMP'), password: "employer123", joinedDate: new Date().toISOString(), isVerified: false },
-        ...Object.values(STAFF_ACCOUNTS).map(s => ({ 
+        filterObject({ 
+          ...MOCK_USER, 
+          idNumber: generateIdNumber('SKR'), 
+          password: await hashPassword("user123"), 
+          joinedDate: new Date().toISOString(), 
+          isVerified: true 
+        }, USER_TABLE_KEYS),
+        filterObject({ 
+          ...MOCK_EMPLOYER, 
+          idNumber: generateIdNumber('CMP'), 
+          password: await hashPassword("employer123"), 
+          joinedDate: new Date().toISOString(), 
+          isVerified: false 
+        }, USER_TABLE_KEYS),
+        ...Object.values(STAFF_ACCOUNTS).map(async s => filterObject({ 
           ...s, 
-          idNumber: generateIdNumber('USR'), 
-          password: s.opRole === 'super_admin' ? "admin123" : "staff123",
+          idNumber: s.idNumber || generateIdNumber('USR'), 
+          password: await hashPassword(s.opRole === 'super_admin' ? "admin123" : "staff123"),
           joinedDate: new Date().toISOString(),
           isAdmin: true
-        }))
+        }, USER_TABLE_KEYS))
       ];
-      const { error } = await supabase.from('users').insert(mockUsers);
-      if (error) console.error("[SYSTEM] Seeding users error:", error);
+
+      // Resolve all promises and ensure every user has a unique ID
+      // This avoids the "null value in column id" error during bulk insert
+      // when some objects have IDs and others don't, or if the DB default is missing.
+      const resolvedMockUsers = (await Promise.all(mockUsers)).map(u => {
+        const { id, ...rest } = u;
+        return { ...rest, id: id || crypto.randomUUID() };
+      });
+
+      const { error } = await supabase.from('users').insert(resolvedMockUsers);
+      if (error) {
+        console.error("[SYSTEM] Seeding users error:", error.message);
+        console.error("[SYSTEM] Error details:", error.details);
+        console.error("[SYSTEM] Error hint:", error.hint);
+        console.error("[SYSTEM] Error code:", error.code);
+      } else {
+        console.log("[SYSTEM] Mock users seeded successfully.");
+      }
     }
 
     const { count: jobCount } = await supabase.from('jobs').select('*', { count: 'exact', head: true });
@@ -495,23 +564,35 @@ async function startServer() {
       const { data: users } = await supabase.from('users').select('id, companyName').eq('isEmployer', true);
       const employerId = users?.[0]?.id;
 
-      const mockJobs = MOCK_JOBS.map(j => ({
+      const mockJobs = MOCK_JOBS.map(j => filterObject({
         ...j,
         postedBy: employerId,
         postedAt: new Date().toISOString()
-      }));
+      }, JOB_TABLE_KEYS));
       const { error } = await supabase.from('jobs').insert(mockJobs);
-      if (error) console.error("[SYSTEM] Seeding jobs error:", error);
+      if (error) {
+        console.error("[SYSTEM] Seeding jobs error:", error.message);
+        console.error("[SYSTEM] Error details:", error.details);
+        console.error("[SYSTEM] Error code:", error.code);
+      } else {
+        console.log("[SYSTEM] Mock jobs seeded successfully.");
+      }
     }
 
     const { count: blogCount } = await supabase.from('blog_posts').select('*', { count: 'exact', head: true });
     if (blogCount === 0) {
-      const mockPosts = MOCK_BLOG_POSTS.map(p => ({
+      const mockPosts = MOCK_BLOG_POSTS.map(p => filterObject({
         ...p,
         publishedAt: new Date().toISOString()
-      }));
+      }, BLOG_POST_TABLE_KEYS));
       const { error } = await supabase.from('blog_posts').insert(mockPosts);
-      if (error) console.error("[SYSTEM] Seeding blog posts error:", JSON.stringify(error, null, 2));
+      if (error) {
+        console.error("[SYSTEM] Seeding blog posts error:", error.message);
+        console.error("[SYSTEM] Error details:", error.details);
+        console.error("[SYSTEM] Error code:", error.code);
+      } else {
+        console.log("[SYSTEM] Mock blog posts seeded successfully.");
+      }
     }
 
     const { count: testCount } = await supabase.from('aptitude_tests').select('*', { count: 'exact', head: true });
@@ -520,14 +601,20 @@ async function startServer() {
       const mockTests = MOCK_APTITUDE_TESTS.map(t => {
         // Find the job by its original mock ID (which is now a UUID in constants.ts)
         const job = jobs?.find(j => j.id === t.jobId);
-        return {
+        return filterObject({
           ...t,
           jobId: job?.id || t.jobId,
           createdAt: new Date().toISOString()
-        };
+        }, APTITUDE_TEST_TABLE_KEYS);
       });
       const { error } = await supabase.from('aptitude_tests').insert(mockTests);
-      if (error) console.error("[SYSTEM] Seeding tests error:", JSON.stringify(error, null, 2));
+      if (error) {
+        console.error("[SYSTEM] Seeding tests error:", error.message);
+        console.error("[SYSTEM] Error details:", error.details);
+        console.error("[SYSTEM] Error code:", error.code);
+      } else {
+        console.log("[SYSTEM] Mock aptitude tests seeded successfully.");
+      }
     }
   };
 
@@ -694,9 +781,10 @@ async function startServer() {
         })) : []
       };
 
+      const userToInsert = { ...newUser, id: crypto.randomUUID() };
       const { data: insertedUser, error: insertError } = await supabase
         .from('users')
-        .insert([newUser])
+        .insert([userToInsert])
         .select()
         .single();
 
@@ -793,7 +881,7 @@ async function startServer() {
 
   app.post("/api/auth/sync", async (req, res) => {
     try {
-      const { access_token } = req.body;
+      const { access_token, isEmployer: intendedIsEmployer } = req.body;
       if (!access_token) {
         return res.status(400).json({ message: "Access token required" });
       }
@@ -804,27 +892,65 @@ async function startServer() {
       }
 
       const email = sbUser.email?.toLowerCase();
-      let { data: user } = await supabase
-        .from('users')
-        .select('*')
-        .eq('email', email)
-        .single();
+      
+      // If isEmployer is explicitly provided (true or false), try that first
+      let user = null;
+      if (intendedIsEmployer !== undefined) {
+        const { data } = await supabase
+          .from('users')
+          .select('*')
+          .eq('email', email)
+          .eq('isEmployer', !!intendedIsEmployer)
+          .maybeSingle();
+        user = data;
+      }
 
+      // If not found or role not specified, look for ANY existing account
       if (!user) {
-        // Create user if not exists (defaulting to Seeker)
+        const { data: existingUsers } = await supabase
+          .from('users')
+          .select('*')
+          .eq('email', email);
+        
+        if (existingUsers && existingUsers.length > 0) {
+          // If we have multiple, prioritize based on intended role if provided, 
+          // otherwise prioritize Admin > Employer > Seeker
+          if (intendedIsEmployer !== undefined) {
+            user = existingUsers.find(u => u.isEmployer === !!intendedIsEmployer) || existingUsers[0];
+          } else {
+            user = existingUsers.find(u => u.isAdmin) || 
+                   existingUsers.find(u => u.isEmployer) || 
+                   existingUsers[0];
+          }
+        }
+      }
+
+      // If still no user, create a new one
+      if (!user) {
+        const isEmployer = intendedIsEmployer !== undefined ? !!intendedIsEmployer : false;
         const newUser = {
           name: sbUser.user_metadata.full_name || sbUser.user_metadata.name || email?.split('@')[0],
           email,
-          isEmployer: false,
-          isVerified: true,
-          role: "Seeker",
+          isEmployer: isEmployer,
+          isVerified: !isEmployer, // Seekers are verified by default via social, Employers need manual verification
+          role: isEmployer ? "Employer" : "Seeker",
           joinedDate: new Date().toISOString(),
-          idNumber: generateIdNumber('SKR'),
-          profileCompleted: false
+          idNumber: generateIdNumber(isEmployer ? 'CMP' : 'SKR'),
+          profileCompleted: false,
+          isSuperUser: isEmployer
         };
-        const { data: inserted, error: insertError } = await supabase.from('users').insert([newUser]).select().single();
+        const userToInsert = { ...newUser, id: crypto.randomUUID() };
+        const { data: inserted, error: insertError } = await supabase.from('users').insert([userToInsert]).select().single();
         if (insertError) throw insertError;
         user = inserted;
+
+        if (isEmployer) {
+          notifyStaff(
+            "New Employer Social Sign Up",
+            `A new employer ${user.name} (${email}) has signed up via social login and requires verification.`,
+            { view: 'admin', params: { tab: 'verifications' } }
+          );
+        }
       }
 
       const token = jwt.sign({ email: user.email, isEmployer: user.isEmployer, isAdmin: user.isAdmin, role: user.role }, FINAL_JWT_SECRET, { expiresIn: "24h" });

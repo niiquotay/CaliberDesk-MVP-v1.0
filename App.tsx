@@ -107,7 +107,7 @@ const INITIAL_GUEST: UserProfile = {
     {
       id: 'auto-apply-tip',
       title: 'Pro Tip: Auto-Apply',
-      message: 'Did you know you can enable Auto-Apply in your settings? Our AI will automatically apply to jobs that match your profile by 80% or more.',
+      message: 'Did you know you can enable Auto-Apply in your settings? Our AI will automatically apply to jobs that match your profile by 80% or more (excluding external applications).',
       type: 'in-app',
       category: 'auto-apply',
       date: new Date(Date.now() - 3600000).toISOString(),
@@ -122,6 +122,8 @@ const App: React.FC = () => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('view') === 'profile') return 'profile';
     if (window.location.pathname === '/admin' || window.location.pathname === '/staff-login' || window.location.pathname === '/signin') return 'signin';
+    if (window.location.pathname === '/employer') return 'employer';
+    if (window.location.pathname === '/seeker') return 'seeker';
     return 'home';
   });
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -218,17 +220,29 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const handlePopState = () => {
-      if (window.location.pathname === '/admin' || window.location.pathname === '/staff-login') {
+      const path = window.location.pathname;
+      if (path === '/admin' || path === '/staff-login') {
         if (user.isAdmin || user.opRole) {
           setView('admin');
         } else {
           setSignInIsStaff(true);
           setView('signin');
         }
-      } else if (window.location.pathname === '/signin') {
+      } else if (path === '/signin') {
         setSignInIsStaff(false);
         setView('signin');
-      } else if (window.location.pathname === '/') {
+      } else if (path === '/employer') {
+        if (user.isEmployer) {
+          setView('employer');
+        } else if (!user.email) {
+          setSignInIsEmployer(true);
+          setView('signin');
+        } else {
+          setView('home');
+        }
+      } else if (path === '/seeker') {
+        setView('seeker');
+      } else if (path === '/') {
         setView('home');
       }
     };
@@ -238,30 +252,74 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN' && session) {
+      console.log(`[AUTH] Event: ${event}`, session ? "Session active" : "No session");
+      
+      if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session) {
         // Sync with our backend to get the full user profile and set the JWT cookie
         try {
+          const params = new URLSearchParams(window.location.search);
+          const roleFromUrl = params.get('role');
+          
+          // Only pass isEmployer if explicitly requested via URL role param
+          // This prevents accidentally creating/switching to a seeker account on refresh
+          const isEmployer = roleFromUrl === 'employer' ? true : (roleFromUrl === 'seeker' ? false : undefined);
+          
+          console.log(`[AUTH] Syncing session. Role from URL: ${roleFromUrl}, isEmployer: ${isEmployer}`);
+          
           const response = await fetch('/api/auth/sync', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ access_token: session.access_token })
+            body: JSON.stringify({ 
+              access_token: session.access_token,
+              isEmployer: isEmployer
+            })
           });
           
           if (response.ok) {
             const userData = await response.json();
+            console.log(`[AUTH] Sync successful. User: ${userData.email}, Role: ${userData.role}, isEmployer: ${userData.isEmployer}`);
             setUser(userData);
+            setShowAuthGate(false);
             
-            // If we're on a sign-in page, move to home or admin
-            if (window.location.pathname === '/admin' || window.location.pathname === '/staff-login') {
-              setView('admin');
-            } else if (view === 'signin') {
-              setView('home');
+            // Determine if we should redirect based on current state and URL
+            const isAuthPage = window.location.pathname === '/admin' || 
+                               window.location.pathname === '/staff-login' || 
+                               window.location.pathname === '/signin' ||
+                               view === 'signin' ||
+                               view === 'home' ||
+                               showAuthGate;
+
+            const isRoleMismatch = (window.location.pathname === '/employer' && !userData.isEmployer) ||
+                                   (window.location.pathname === '/seeker' && userData.isEmployer);
+
+            console.log(`[AUTH] Checking redirect. isAuthPage: ${isAuthPage}, isRoleMismatch: ${isRoleMismatch}, Path: ${window.location.pathname}, View: ${view}`);
+
+            if (isAuthPage || isRoleMismatch) {
+              if (userData.isAdmin || userData.opRole) {
+                console.log("[AUTH] Redirecting to admin dashboard");
+                setView('admin');
+                window.history.pushState({}, '', '/admin');
+              } else if (userData.isEmployer) {
+                console.log("[AUTH] Redirecting to employer dashboard");
+                setView('employer');
+                window.history.pushState({}, '', '/employer');
+              } else {
+                console.log("[AUTH] Redirecting to seeker dashboard");
+                setView('seeker');
+                window.history.pushState({}, '', '/seeker');
+              }
             }
+          } else {
+            const errorData = await response.json();
+            console.error("[AUTH] Sync failed:", errorData.message);
+            setToast({ message: "Authentication sync failed. Please try again.", type: 'error' });
           }
         } catch (err) {
-          console.error("Auth sync error:", err);
+          console.error("[AUTH] Sync error:", err);
+          setToast({ message: "Network error during authentication sync.", type: 'error' });
         }
       } else if (event === 'SIGNED_OUT') {
+        console.log("[AUTH] User signed out");
         setUser(INITIAL_GUEST);
         setView('home');
       }
@@ -1120,6 +1178,7 @@ const App: React.FC = () => {
       setView('employer-management');
       setAutoOpenJobCreate(true);
       setTimeout(() => setAutoOpenJobCreate(false), 500);
+      window.history.pushState({}, '', '/employer');
       return;
     }
 
@@ -1130,11 +1189,28 @@ const App: React.FC = () => {
     }
     
     if (targetView === 'home' && user.email) {
-      setUser(INITIAL_GUEST);
-      setToast({ message: "Session Terminated.", type: 'info' });
+      if (user.isAdmin || user.opRole) {
+        setView('admin');
+        window.history.pushState({}, '', '/admin');
+        return;
+      } else if (user.isEmployer) {
+        setView('employer');
+        window.history.pushState({}, '', '/employer');
+        return;
+      } else {
+        setView('seeker');
+        window.history.pushState({}, '', '/seeker');
+        return;
+      }
     }
 
     setView(targetView);
+    const path = targetView === 'home' ? '/' : 
+                 targetView === 'employer' ? '/employer' :
+                 targetView === 'seeker' ? '/seeker' :
+                 targetView === 'signin' ? '/signin' :
+                 targetView === 'admin' ? '/admin' : '/';
+    window.history.pushState({}, '', path);
   };
 
   const handleEditJob = (job: Job) => {

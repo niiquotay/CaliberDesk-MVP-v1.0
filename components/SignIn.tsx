@@ -247,11 +247,13 @@ const SignIn: React.FC<SignInProps> = ({ onSignIn, onBack, initialIsEmployer = f
     setError(null);
     
     try {
+      const redirectTo = `${window.location.origin}/signin?role=${isEmployer ? 'employer' : 'seeker'}`;
+      
       if (provider === 'Google') {
         const { error } = await supabase.auth.signInWithOAuth({
           provider: 'google',
           options: {
-            redirectTo: window.location.origin,
+            redirectTo,
           },
         });
         if (error) throw error;
@@ -262,7 +264,7 @@ const SignIn: React.FC<SignInProps> = ({ onSignIn, onBack, initialIsEmployer = f
         const { error } = await supabase.auth.signInWithOAuth({
           provider: 'linkedin_oidc',
           options: {
-            redirectTo: window.location.origin,
+            redirectTo,
           },
         });
         if (error) throw error;

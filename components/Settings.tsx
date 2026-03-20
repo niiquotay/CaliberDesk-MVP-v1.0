@@ -88,7 +88,7 @@ const Settings: React.FC<SettingsProps> = ({ user, setUser, onUpgradeRequest, on
                  <div className="flex items-center justify-between p-4 rounded-xl bg-white/[0.03] border border-white/10 hover:border-[#F0C927]/30 transition-all duration-500 group shadow-inner">
                     <div className="space-y-0.5">
                        <h4 className="text-xs font-black tracking-tight">Auto-Apply Protocol</h4>
-                       <p className="text-[9px] text-white/40 font-black">Automatically apply to jobs with ≥80% match score</p>
+                       <p className="text-[9px] text-white/40 font-black">Automatically apply to jobs with ≥80% match score (excludes external sites)</p>
                     </div>
                     <button 
                       onClick={() => {
