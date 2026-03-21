@@ -222,19 +222,67 @@ const SignIn: React.FC<SignInProps> = ({ onSignIn, onBack, initialIsEmployer = f
         subUsers 
       };
 
-      const response = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+      // 1. Sign up with Supabase Auth
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            firstName,
+            lastName,
+            isEmployer,
+            companyName: isEmployer ? companyName : undefined,
+          }
+        }
       });
 
-      const data = await response.json();
+      if (authError) throw authError;
 
-      if (!response.ok) {
-        throw new Error(data.message || 'Registration failed');
+      // 2. Directly update the 'profiles' table (and 'users' table for backward compatibility)
+      if (authData.user) {
+        const profileData = { 
+          id: authData.user.id, 
+          email: authData.user.email,
+          last_sign_in: new Date(),
+          firstName,
+          middleName,
+          lastName,
+          name: `${firstName} ${middleName ? middleName + ' ' : ''}${lastName}`,
+          phoneNumbers: [phone],
+          isEmployer,
+          companyName: isEmployer ? companyName : null,
+          country,
+          role: isEmployer ? "Employer" : "Seeker",
+          joinedDate: new Date().toISOString(),
+          profileCompleted: false,
+          isVerified: !isEmployer, // Seekers are auto-verified in this flow
+          idNumber: `SKR-${Math.floor(10000 + Math.random() * 90000)}` // Simple ID generation for client-side
+        };
+
+        // Update 'profiles' table as requested
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .upsert(profileData);
+        
+        if (profileError) console.error("Profiles sync failed:", profileError.message);
+
+        // Also update 'users' table to ensure the rest of the app continues to work
+        const { error: userError } = await supabase
+          .from('users')
+          .upsert({
+            ...profileData,
+            password: '', // Don't store password in plain text, Supabase Auth handles it
+            subUsers: isEmployer ? subUsers : []
+          });
+
+        if (userError) console.error("Users sync failed:", userError.message);
       }
 
-      onSignIn(data);
+      // After successful sign-up, the onAuthStateChange in App.tsx will handle the session sync
+      // However, we can also manually call onSignIn if we have the data
+      // But since we want to set the JWT cookie, it's better to let App.tsx handle it via /api/auth/sync
+      
+      // We don't call onSignIn(data) here because we want the sync to happen first
     } catch (err: any) {
       setError(err.message);
     } finally {

@@ -312,7 +312,10 @@ const App: React.FC = () => {
           } else {
             const errorData = await response.json();
             console.error("[AUTH] Sync failed:", errorData.message);
-            setToast({ message: "Authentication sync failed. Please try again.", type: 'error' });
+            // If sync fails, it might be because the user doesn't exist in our DB yet
+            // but is logged in via Supabase Auth (e.g. social login)
+            // We should probably keep the session but warn the user
+            setToast({ message: "Authentication sync failed. Please complete your registration.", type: 'info' });
           }
         } catch (err) {
           console.error("[AUTH] Sync error:", err);
@@ -326,7 +329,7 @@ const App: React.FC = () => {
     });
 
     return () => subscription.unsubscribe();
-  }, [view]);
+  }, []);
 
   useEffect(() => {
     const fetchInitialData = async () => {
@@ -367,7 +370,7 @@ const App: React.FC = () => {
       }
     };
     fetchInitialData();
-  }, []);
+  }, [user.id]);
 
   useEffect(() => {
     const timer = setTimeout(() => {

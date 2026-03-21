@@ -299,6 +299,7 @@ const JobManagement: React.FC<JobManagementProps> = ({
       industry: "",
       externalApplyUrl: "",
       tags: [],
+      idNumber: "",
     },
   );
 
@@ -363,6 +364,13 @@ const JobManagement: React.FC<JobManagementProps> = ({
       });
       return;
     }
+    
+    // Auto-generate Job ID if not present
+    if (!newJob.idNumber) {
+      const random = Math.floor(10000 + Math.random() * 90000);
+      setNewJob(prev => ({ ...prev, idNumber: `JOB-${random}` }));
+    }
+    
     setIsCreatingJob(true);
   };
 
@@ -1273,6 +1281,18 @@ const JobManagement: React.FC<JobManagementProps> = ({
                         </h4>
                       </div>
                     <div className="grid md:grid-cols-4 gap-6">
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-semibold text-slate-500 ml-1">
+                          Job ID Number <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={newJob.idNumber || ""}
+                          readOnly
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 px-5 text-sm text-slate-500 outline-none cursor-not-allowed"
+                          placeholder="Auto-generating..."
+                        />
+                      </div>
                       <div className="space-y-2">
                         <label className="text-[10px] font-semibold text-slate-500 ml-1">
                           Professional Job Title{" "}

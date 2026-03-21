@@ -195,10 +195,34 @@ async function startServer() {
     const now = new Date();
     const fortyEightHoursLater = new Date(now.getTime() + 48 * 60 * 60 * 1000);
 
-    console.log("[SYSTEM] Checking for jobs nearing expiry...");
+    console.log("[SYSTEM] Checking for jobs nearing expiry and already expired...");
 
     try {
-      // Fetch active jobs that expire in the next 48 hours
+      // 1. Close jobs that have already expired
+      const { data: expiredJobs, error: expiredError } = await supabase
+        .from('jobs')
+        .select('*')
+        .eq('status', 'active')
+        .lt('expiryDate', now.toISOString());
+
+      if (expiredError) {
+        console.error("[SYSTEM] Expired jobs query error:", expiredError.message);
+      } else if (expiredJobs && expiredJobs.length > 0) {
+        for (const job of expiredJobs) {
+          // Premium jobs might have a grace period or different logic
+          // For now, we'll close them but log if they are premium
+          if (job.isPremium) {
+            console.log(`[SYSTEM] Closing premium job: ${job.title} (${job.idNumber})`);
+          } else {
+            console.log(`[SYSTEM] Closing standard job: ${job.title} (${job.idNumber})`);
+          }
+          
+          await supabase.from('jobs').update({ status: 'closed' }).eq('id', job.id);
+        }
+        console.log(`[SYSTEM] Closed ${expiredJobs.length} expired jobs.`);
+      }
+
+      // 2. Fetch active jobs that expire in the next 48 hours
       const { data: jobs, error: jobsError } = await supabase
         .from('jobs')
         .select('*')
@@ -925,6 +949,19 @@ async function startServer() {
         }
       }
 
+      // Check 'profiles' table as requested
+      if (!user) {
+        const { data: profileUser } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('email', email)
+          .maybeSingle();
+        
+        if (profileUser) {
+          user = profileUser;
+        }
+      }
+
       // If still no user, create a new one
       if (!user) {
         const isEmployer = intendedIsEmployer !== undefined ? !!intendedIsEmployer : false;
@@ -939,10 +976,19 @@ async function startServer() {
           profileCompleted: false,
           isSuperUser: isEmployer
         };
+
         const userToInsert = { ...newUser, id: crypto.randomUUID() };
         const { data: inserted, error: insertError } = await supabase.from('users').insert([userToInsert]).select().single();
         if (insertError) throw insertError;
         user = inserted;
+
+        // Also insert into 'profiles' for consistency
+        await supabase.from('profiles').upsert({
+          id: user.id,
+          email: user.email,
+          last_sign_in: new Date(),
+          ...newUser
+        });
 
         if (isEmployer) {
           notifyStaff(
@@ -1149,7 +1195,7 @@ async function startServer() {
       postedBy: user?.id,
       company: user?.companyName || req.body.company,
       postedAt: new Date().toISOString(),
-      idNumber: generateIdNumber('JOB'),
+      idNumber: req.body.idNumber || generateIdNumber('JOB'),
       status: 'active'
     };
 
@@ -1564,6 +1610,7 @@ async function startServer() {
     console.log(`Server running on http://localhost:${PORT}`);
     await checkSupabaseConnection();
     await seedMockUsers();
+    await checkJobExpiries(); // Run once on startup
   });
 }
 
