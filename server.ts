@@ -27,127 +27,128 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-async function startServer() {
-  const app = express();
-  const PORT = 3000;
-  const JWT_SECRET = process.env.JWT_SECRET;
+const app = express();
+const PORT = 3000;
+const JWT_SECRET = process.env.JWT_SECRET;
 
-  if (!JWT_SECRET || JWT_SECRET === "fallback_secret") {
-    console.warn("[SECURITY] JWT_SECRET is not set or using a weak fallback. Please set a strong secret in environment variables.");
-  }
+if (!JWT_SECRET || JWT_SECRET === "fallback_secret") {
+  console.warn("[SECURITY] JWT_SECRET is not set or using a weak fallback. Please set a strong secret in environment variables.");
+}
 
-  const FINAL_JWT_SECRET = JWT_SECRET || "fallback_secret";
+const FINAL_JWT_SECRET = JWT_SECRET || "fallback_secret";
 
-  // Security Headers
-  app.use(helmet({
-    contentSecurityPolicy: false, // Disable CSP for development with Vite
-    crossOriginEmbedderPolicy: false
-  }));
+// Security Headers
+app.use(helmet({
+  contentSecurityPolicy: false, // Disable CSP for development with Vite
+  crossOriginEmbedderPolicy: false
+}));
 
-  // Resilient CORS for development and production
-  const allowedOrigins = [
-    process.env.APP_URL,
-    process.env.SHARED_APP_URL,
-    'http://localhost:3000',
-    'http://localhost:5173'
-  ].filter(Boolean);
+// Resilient CORS for development and production
+const allowedOrigins = [
+  process.env.APP_URL,
+  process.env.SHARED_APP_URL,
+  'http://localhost:3000',
+  'http://localhost:5173'
+].filter(Boolean);
 
-  app.use(cors({
-    origin: function (origin, callback) {
-      // Allow requests with no origin (like mobile apps or curl)
-      if (!origin) return callback(null, true);
-      
-      // In development, be more permissive
-      if (process.env.NODE_ENV !== 'production') return callback(null, true);
+app.use(cors({
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl)
+    if (!origin) return callback(null, true);
+    
+    // In development, be more permissive
+    if (process.env.NODE_ENV !== 'production') return callback(null, true);
 
-      if (allowedOrigins.indexOf(origin) !== -1 || origin.endsWith('.run.app')) {
-        callback(null, true);
+    if (allowedOrigins.indexOf(origin) !== -1 || origin.endsWith('.run.app')) {
+      callback(null, true);
+    } else {
+      console.warn(`[CORS] Blocked origin: ${origin}`);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true
+}));
+
+app.use(express.json());
+app.use(cookieParser());
+
+// Supabase Connection Health Check
+const checkSupabaseConnection = async () => {
+  try {
+    const { data, error } = await supabase.from('users').select('id').limit(1);
+    if (error) {
+      if (error.message.includes('the client is offline')) {
+        console.error("[CRITICAL] Supabase client is offline. Check your URL and Key.");
       } else {
-        console.warn(`[CORS] Blocked origin: ${origin}`);
-        callback(new Error('Not allowed by CORS'));
+        console.error("[SYSTEM] Supabase connection error:", error.message);
       }
-    },
-    credentials: true
-  }));
-
-  app.use(express.json());
-  app.use(cookieParser());
-
-  // Supabase Connection Health Check
-  const checkSupabaseConnection = async () => {
-    try {
-      const { data, error } = await supabase.from('users').select('id').limit(1);
-      if (error) {
-        if (error.message.includes('the client is offline')) {
-          console.error("[CRITICAL] Supabase client is offline. Check your URL and Key.");
-        } else {
-          console.error("[SYSTEM] Supabase connection error:", error.message);
-        }
-        return false;
-      }
-      console.log("[SYSTEM] Supabase connection verified.");
-      return true;
-    } catch (err) {
-      console.error("[SYSTEM] Supabase connection failed:", err);
       return false;
     }
-  };
+    console.log("[SYSTEM] Supabase connection verified.");
+    return true;
+  } catch (err) {
+    console.error("[SYSTEM] Supabase connection failed:", err);
+    return false;
+  }
+};
 
-  app.get("/api/health", (req, res) => {
-    res.json({ status: "ok", timestamp: new Date().toISOString() });
+app.get("/api/health", (req, res) => {
+  res.json({ status: "ok", timestamp: new Date().toISOString() });
+});
+
+// ID Generation Utility
+const generateIdNumber = (prefix: string) => {
+  const random = Math.floor(10000 + Math.random() * 90000);
+  return `${prefix}-${random}`;
+};
+
+// Helper to filter objects to only include valid keys for a table
+const filterObject = (obj: any, validKeys: string[]) => {
+  const filtered: any = {};
+  validKeys.forEach(key => {
+    if (key in obj && obj[key] !== undefined && obj[key] !== null) {
+      filtered[key] = obj[key];
+    }
   });
+  return filtered;
+};
 
-  // ID Generation Utility
-  const generateIdNumber = (prefix: string) => {
-    const random = Math.floor(10000 + Math.random() * 90000);
-    return `${prefix}-${random}`;
-  };
+const USER_TABLE_KEYS = [
+  'id', 'email', 'password', 'name', 'firstName', 'middleName', 'lastName', 'phoneNumbers',
+  'isEmployer', 'isVerified', 'joinedDate', 'companyName', 'isSuperUser', 'idNumber',
+  'role', 'city', 'country', 'skills', 'digitalSkills', 'certifications', 'hobbies',
+  'projects', 'experienceSummary', 'profileCompleted', 'linkedInConnected', 'isSubscribed',
+  'subscriptionTier', 'purchaseHistory', 'adOptIn', 'alerts', 'savedJobIds', 'autoApplyEnabled',
+  'profileImages', 'workHistory', 'education', 'stealthMode', 'notifications', 'subUsers',
+  'isAdmin', 'opRole', 'isDeactivated', 'deactivationDate', 'verificationEmail',
+  'verificationMethod', 'verificationDocuments', 'pendingAssessmentReminders',
+  'employmentVerificationStatus', 'verificationCertificateUrl'
+];
 
-  // Helper to filter objects to only include valid keys for a table
-  const filterObject = (obj: any, validKeys: string[]) => {
-    const filtered: any = {};
-    validKeys.forEach(key => {
-      if (key in obj && obj[key] !== undefined && obj[key] !== null) {
-        filtered[key] = obj[key];
-      }
-    });
-    return filtered;
-  };
+const JOB_TABLE_KEYS = [
+  'id', 'idNumber', 'title', 'company', 'city', 'country', 'location', 'category',
+  'allowedCountries', 'salary', 'description', 'responsibilities', 'requirements',
+  'tags', 'benefits', 'postedAt', 'expiryDate', 'isPremium', 'isQuickHire', 'status',
+  'applicationType', 'externalApplyUrl', 'industry', 'postedBy', 'aptitudeTestId'
+];
 
-  const USER_TABLE_KEYS = [
-    'id', 'email', 'password', 'name', 'firstName', 'middleName', 'lastName', 'phoneNumbers',
-    'isEmployer', 'isVerified', 'joinedDate', 'companyName', 'isSuperUser', 'idNumber',
-    'role', 'city', 'country', 'skills', 'digitalSkills', 'certifications', 'hobbies',
-    'projects', 'experienceSummary', 'profileCompleted', 'linkedInConnected', 'isSubscribed',
-    'subscriptionTier', 'purchaseHistory', 'adOptIn', 'alerts', 'savedJobIds', 'autoApplyEnabled',
-    'profileImages', 'workHistory', 'education', 'stealthMode', 'notifications', 'subUsers',
-    'isAdmin', 'opRole', 'isDeactivated', 'deactivationDate', 'verificationEmail',
-    'verificationMethod', 'verificationDocuments', 'pendingAssessmentReminders',
-    'employmentVerificationStatus', 'verificationCertificateUrl'
-  ];
+const BLOG_POST_TABLE_KEYS = [
+  'id', 'title', 'content', 'author', 'authorRole', 'publishedAt', 'imageUrl',
+  'videoUrl', 'tags', 'readTime', 'isDraft'
+];
 
-  const JOB_TABLE_KEYS = [
-    'id', 'idNumber', 'title', 'company', 'city', 'country', 'location', 'category',
-    'allowedCountries', 'salary', 'description', 'responsibilities', 'requirements',
-    'tags', 'benefits', 'postedAt', 'expiryDate', 'isPremium', 'isQuickHire', 'status',
-    'applicationType', 'externalApplyUrl', 'industry', 'postedBy', 'aptitudeTestId'
-  ];
+const APTITUDE_TEST_TABLE_KEYS = [
+  'id', 'jobId', 'title', 'questions', 'timeLimit', 'createdAt', 'difficulty'
+];
 
-  const BLOG_POST_TABLE_KEYS = [
-    'id', 'title', 'content', 'author', 'authorRole', 'publishedAt', 'imageUrl',
-    'videoUrl', 'tags', 'readTime', 'isDraft'
-  ];
+let tablesReady = false;
 
-  const APTITUDE_TEST_TABLE_KEYS = [
-    'id', 'jobId', 'title', 'questions', 'timeLimit', 'createdAt', 'difficulty'
-  ];
-
-  // Helper to send in-app notifications to staff
-  const notifyStaff = async (title: string, message: string, actionLink?: any) => {
-    const { data: staff, error } = await supabase
-      .from('users')
-      .select('*')
-      .or('isAdmin.eq.true,opRole.neq.null');
+// Helper to send in-app notifications to staff
+const notifyStaff = async (title: string, message: string, actionLink?: any) => {
+  const { data: staff, error } = await supabase
+    .from('users')
+    .select('*')
+    .or('isAdmin.eq.true,opRole.neq.null');
     
     if (error || !staff) return;
 
@@ -186,8 +187,22 @@ async function startServer() {
   };
 
   // Run deactivation check every hour (simulated)
-  setInterval(checkDeactivations, 60 * 60 * 1000);
-  checkDeactivations(); // Initial check
+  const startBackgroundTasks = () => {
+    setInterval(checkDeactivations, 60 * 60 * 1000);
+    checkDeactivations(); // Initial check
+
+    // Run job expiry check every 12 hours (simulated)
+    setInterval(checkJobExpiries, 12 * 60 * 60 * 1000);
+    setTimeout(checkJobExpiries, 5000); // Initial check after startup
+
+    // Run assessment reminder check every 6 hours (simulated)
+    setInterval(checkAssessmentReminders, 6 * 60 * 60 * 1000);
+    setTimeout(checkAssessmentReminders, 10000); // Initial check after startup
+
+    // Run 7-day update check every 24 hours
+    setInterval(checkApplication7dUpdates, 24 * 60 * 60 * 1000);
+    setTimeout(checkApplication7dUpdates, 15000); // Initial check after startup
+  };
 
   // Helper to check for job expiries and notify applicants
   const checkJobExpiries = async () => {
@@ -302,8 +317,8 @@ async function startServer() {
   };
 
   // Run job expiry check every 12 hours (simulated)
-  setInterval(checkJobExpiries, 12 * 60 * 60 * 1000);
-  setTimeout(checkJobExpiries, 5000); // Initial check after startup
+  // setInterval(checkJobExpiries, 12 * 60 * 60 * 1000);
+  // setTimeout(checkJobExpiries, 5000); // Initial check after startup
 
   // Helper to check for assessment reminders
   const checkAssessmentReminders = async () => {
@@ -412,8 +427,8 @@ async function startServer() {
   };
 
   // Run assessment reminder check every 6 hours (simulated)
-  setInterval(checkAssessmentReminders, 6 * 60 * 60 * 1000);
-  setTimeout(checkAssessmentReminders, 10000); // Initial check after startup
+  // setInterval(checkAssessmentReminders, 6 * 60 * 60 * 1000);
+  // setTimeout(checkAssessmentReminders, 10000); // Initial check after startup
 
   // Helper to check for 7-day application status updates
   const checkApplication7dUpdates = async () => {
@@ -469,8 +484,8 @@ async function startServer() {
   };
 
   // Run 7-day update check every 24 hours
-  setInterval(checkApplication7dUpdates, 24 * 60 * 60 * 1000);
-  setTimeout(checkApplication7dUpdates, 15000); // Initial check after startup
+  // setInterval(checkApplication7dUpdates, 24 * 60 * 60 * 1000);
+  // setTimeout(checkApplication7dUpdates, 15000); // Initial check after startup
 
   // Validation Schemas
   const loginSchema = z.object({
@@ -504,22 +519,26 @@ async function startServer() {
       next();
     });
   };
-  let tablesReady = false;
-
   const seedMockUsers = async () => {
     // Check if required tables exist
     const requiredTables = ['users', 'jobs', 'blog_posts', 'applications', 'aptitude_tests'];
     let allExist = true;
 
     for (const table of requiredTables) {
-      const { error } = await supabase.from(table).select('id').limit(1);
-      if (error) {
-        if (error.code === '42P01' || error.message?.includes('schema cache')) {
-          console.error(`\n[CRITICAL] Supabase table '${table}' not found.`);
-          allExist = false;
-        } else {
-          console.error(`[SYSTEM] Error checking table '${table}':`, error.message || error);
+      try {
+        const { error } = await supabase.from(table).select('id').limit(1);
+        if (error) {
+          if (error.code === '42P01' || error.message?.includes('schema cache')) {
+            console.error(`\n[CRITICAL] Supabase table '${table}' not found.`);
+            allExist = false;
+          } else {
+            console.error(`[SYSTEM] Error checking table '${table}':`, error.message || error);
+            allExist = false; // If we can't check, assume it's not ready
+          }
         }
+      } catch (err: any) {
+        console.error(`[SYSTEM] Fetch failed while checking table '${table}':`, err.message || err);
+        allExist = false;
       }
     }
 
@@ -1606,13 +1625,20 @@ async function startServer() {
     res.status(500).json({ message: "An unexpected error occurred. Please try again later." });
   });
 
-  app.listen(PORT, "0.0.0.0", async () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-    await checkSupabaseConnection();
-    await seedMockUsers();
-    await checkJobExpiries(); // Run once on startup
-  });
-}
+const startServer = async () => {
+  if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
+    app.listen(PORT, "0.0.0.0", async () => {
+      console.log(`Server running on http://localhost:${PORT}`);
+      const connected = await checkSupabaseConnection();
+      if (connected) {
+        await seedMockUsers();
+        if (tablesReady) {
+          startBackgroundTasks();
+        }
+      }
+    });
+  }
+};
 
 process.on("unhandledRejection", (reason, promise) => {
   console.error("Unhandled Rejection at:", promise, "reason:", reason);
@@ -1625,3 +1651,5 @@ process.on("uncaughtException", (err) => {
 startServer().catch(err => {
   console.error("Failed to start server:", err);
 });
+
+export default app;
