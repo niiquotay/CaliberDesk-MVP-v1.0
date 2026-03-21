@@ -1,11 +1,13 @@
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || ""
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || ""
 
-// This check prevents the "Unexpected token" crash by stopping early
 if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error("Supabase URL and Key are required! Check Vercel Env Vars.")
+  console.error("Supabase URL and Key are missing! Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your environment variables.")
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+export const supabase = createClient(
+  supabaseUrl || 'https://placeholder.supabase.co', 
+  supabaseAnonKey || 'placeholder-key'
+)
