@@ -14,6 +14,9 @@ import dotenv from "dotenv";
 // import { GoogleGenerativeAI } from "@google/genai";
 import { createClient } from "@supabase/supabase-js";
 import { MOCK_USER } from '../constants.js';
+import { jsPDF } from "jspdf";
+import "jspdf-autotable";
+import { parsePhoneNumberFromString } from "libphonenumber-js";
 
 dotenv.config();
 const app = express();
@@ -23,10 +26,9 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 app.get('/api/test', async (req, res) => {
   res.status(200).json({ 
-    status: "most of group a ok", 
-    zod: typeof z !== 'undefined',
-    helmet: typeof helmet !== 'undefined',
-    rateLimit: typeof rateLimit !== 'undefined',
+    status: "final dependency test ok", 
+    jspdf: typeof jsPDF !== 'undefined',
+    libphonenumber: typeof parsePhoneNumberFromString !== 'undefined',
     time: new Date().toISOString() 
   });
 });
