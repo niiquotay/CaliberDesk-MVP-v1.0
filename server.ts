@@ -4,7 +4,6 @@ import cors from "cors";
 import helmet from "helmet";
 import { z } from "zod";
 import rateLimit from "express-rate-limit";
-import { createServer as createViteServer } from "vite";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import cookieParser from "cookie-parser";
@@ -18,7 +17,7 @@ import { UserProfile } from "./types";
 
 dotenv.config();
 
-const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://dummy.supabase.co";
+const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://ghpnirzdfxtxkwmqifld.supabase.co";
 const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || "dummy_anon_key";
 
 if (!supabaseUrl || !supabaseAnonKey) {
@@ -499,10 +498,10 @@ const notifyStaff = async (title: string, message: string, actionLink?: any) => 
     middleName: z.string().optional(),
     lastName: z.string().min(1),
     email: z.string().email(),
-    password: z.string().min(8),
+    password: z.string().min(6),
     isEmployer: z.boolean(),
-    phone: z.string().min(5),
-    country: z.string().min(1),
+    phone: z.string().optional().default(""),
+    country: z.string().optional().default(""),
     companyName: z.string().optional(),
     subUsers: z.array(z.any()).optional(),
     verificationCode: z.string().optional()
@@ -777,9 +776,6 @@ const notifyStaff = async (title: string, message: string, actionLink?: any) => 
       if (isEmployer) {
         if (!companyName) {
           return res.status(400).json({ message: "Company name is required for employer accounts." });
-        }
-        if (!subUsers || subUsers.length === 0) {
-          return res.status(400).json({ message: "Employers are required to add at least one user before the account can be created." });
         }
       }
 
@@ -1589,6 +1585,7 @@ const notifyStaff = async (title: string, message: string, actionLink?: any) => 
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     try {
+      const { createServer: createViteServer } = await import("vite");
       const vite = await createViteServer({
         server: { middlewareMode: true },
         appType: "spa",
