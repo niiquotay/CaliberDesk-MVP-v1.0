@@ -1,0 +1,94 @@
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800;900&family=Poppins:wght@300;400;500;600;700;800;900&family=Wix+Madefor+Display:wght@400;500;600;700;800&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Wix Madefor Display", ui-sans-serif, system-ui, sans-serif;
+  --font-poppins: "Poppins", sans-serif;
+  --font-montserrat: "Montserrat", sans-serif;
+  
+  --color-glass-bg: rgba(255, 255, 255, 0.03);
+  --color-glass-border: rgba(255, 255, 255, 0.08);
+  --color-glass-highlight: rgba(255, 255, 255, 0.12);
+}
+
+@layer base {
+  body {
+    @apply font-sans bg-[#0a4179] text-white antialiased;
+  }
+}
+
+@layer utilities {
+  .glass {
+    @apply bg-white/[0.03] backdrop-blur-xl border border-white/10 shadow-[0_8px_32px_0_rgba(0,0,0,0.3)];
+  }
+  
+  .glass-premium {
+    @apply bg-white/[0.05] backdrop-blur-2xl border border-white/15 shadow-[0_20px_50px_rgba(0,0,0,0.4)] ring-1 ring-white/5;
+  }
+
+  .glass-card {
+    @apply bg-white/[0.03] backdrop-blur-xl border border-white/10 shadow-[0_8px_32px_0_rgba(0,0,0,0.3)] rounded-[2rem] p-6 transition-all duration-500 hover:bg-white/[0.06] hover:border-white/20 hover:shadow-[0_20px_50px_rgba(0,0,0,0.5)] hover:-translate-y-1;
+  }
+
+  .glass-nav {
+    @apply bg-black/20 backdrop-blur-lg border-b border-white/5;
+  }
+
+  .gradient-text {
+    @apply text-transparent bg-gradient-to-r from-[#F0C927] via-[#41d599] to-[#F0C927] bg-[length:200%_auto];
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: gradient 6s ease infinite;
+  }
+
+  @keyframes gradient {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+
+  .animate-gradient {
+    animation: gradient 6s ease infinite;
+  }
+
+  .animate-pulse-subtle {
+    animation: pulse-subtle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  @keyframes pulse-subtle {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.85; transform: scale(1.02); }
+  }
+
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 4px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    @apply bg-white/10 rounded-full hover:bg-white/20 transition-colors;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .markdown-body {
+    @apply text-white/80 leading-relaxed;
+  }
+  .markdown-body h1 { @apply text-3xl font-black text-white mt-8 mb-4; }
+  .markdown-body h2 { @apply text-2xl font-black text-white mt-6 mb-3; }
+  .markdown-body h3 { @apply text-xl font-black text-white mt-4 mb-2; }
+  .markdown-body p { @apply mb-4; }
+  .markdown-body ul { @apply list-disc pl-6 mb-4 space-y-2; }
+  .markdown-body ol { @apply list-decimal pl-6 mb-4 space-y-2; }
+  .markdown-body strong { @apply text-white font-black; }
+  .markdown-body a { @apply text-[#F0C927] hover:underline; }
+  .markdown-body blockquote { @apply border-l-4 border-[#F0C927]/30 pl-4 italic text-white/60 my-6; }
+}
