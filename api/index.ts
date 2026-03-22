@@ -79,7 +79,20 @@ const hashPassword = async (password: string) => {
   return await bcrypt.hash(password, 10);
 };
 
-// Rate Limiters
+// In-memory verification codes
+const verificationCodes: Record<string, { code: string; expires: number }> = {};
+
+// Auth Middleware
+const authenticateToken = (req: any, res: any, next: any) => {
+  const token = req.cookies.token;
+  if (!token) return res.status(401).json({ message: "Unauthorized" });
+
+  jwt.verify(token, FINAL_JWT_SECRET, (err: any, user: any) => {
+    if (err) return res.status(403).json({ message: "Forbidden" });
+    req.user = user;
+    next();
+  });
+};
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 10,
@@ -90,6 +103,30 @@ const authLimiter = rateLimit({
 
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
+});
+
+app.post("/api/auth/send-verification", async (req, res) => {
+  const { email, phone } = req.body;
+  const identifier = email || phone;
+  if (!identifier) return res.status(400).json({ message: "Email or phone is required" });
+
+  const code = Math.floor(100000 + Math.random() * 900000).toString();
+  verificationCodes[identifier] = { code, expires: Date.now() + 10 * 60 * 1000 };
+  console.log(`[AUTH] Verification code for ${identifier}: ${code}`);
+  res.json({ message: "Verification code sent", code }); // Returning code for test verification
+});
+
+app.post("/api/auth/verify-code", async (req, res) => {
+  const { email, phone, code } = req.body;
+  const identifier = email || phone;
+  const record = verificationCodes[identifier];
+
+  if (!record || record.code !== code || record.expires < Date.now()) {
+    return res.status(400).json({ message: "Invalid or expired code" });
+  }
+
+  delete verificationCodes[identifier];
+  res.json({ message: "Code verified" });
 });
 
 app.post("/api/auth/register", authLimiter, async (req, res) => {
@@ -158,6 +195,22 @@ app.post("/api/auth/login", authLimiter, async (req, res) => {
   } catch (err: any) {
     res.status(400).json({ message: "Login failed", error: err.message });
   }
+});
+
+app.get("/api/auth/me", authenticateToken, async (req: any, res) => {
+  try {
+    const { data: user, error } = await supabase.from('users').select('*').eq('id', req.user.id).single();
+    if (error || !user) return res.status(404).json({ message: "User not found" });
+    const { password: _, ...userWithoutPassword } = user;
+    res.json(userWithoutPassword);
+  } catch (err: any) {
+    res.status(500).json({ message: "Error fetching user", error: err.message });
+  }
+});
+
+app.post("/api/auth/logout", (req, res) => {
+  res.clearCookie('token');
+  res.json({ message: "Logged out" });
 });
 
 // Mock other routes for registration completeness
