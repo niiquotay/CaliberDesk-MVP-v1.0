@@ -96,7 +96,7 @@ app.post("/api/auth/register", authLimiter, async (req, res) => {
   try {
     const validation = registerSchema.safeParse(req.body);
     if (!validation.success) {
-      return res.status(400).json({ message: "Invalid input data", errors: validation.error.errors });
+      return res.status(400).json({ message: "Invalid input data", errors: (validation.error as any).errors });
     }
 
     const { firstName, middleName, lastName, email, password, isEmployer, phone, country, companyName, verificationCode } = validation.data;

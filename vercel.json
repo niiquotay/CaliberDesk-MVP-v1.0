@@ -8,18 +8,14 @@
       }
     },
     {
-      "src": "server.ts",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "api/*.ts",
+      "src": "api/index.ts",
       "use": "@vercel/node"
     }
   ],
   "rewrites": [
     {
-      "source": "/api/test",
-      "destination": "/api/test.ts"
+      "source": "/api/health",
+      "destination": "/api/index.ts"
     },
     {
       "source": "/api/(.*)",
