@@ -2,10 +2,10 @@ import crypto from "crypto";
 import express from "express";
 import path from "path";
 import fs from "fs";
-// import cors from "cors";
-// import helmet from "helmet";
-// import { z } from "zod";
-// import rateLimit from "express-rate-limit";
+import cors from "cors";
+import helmet from "helmet";
+import { z } from "zod";
+import rateLimit from "express-rate-limit";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import cookieParser from "cookie-parser";
@@ -23,9 +23,10 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 app.get('/api/test', async (req, res) => {
   res.status(200).json({ 
-    status: "group b list ok", 
-    bcrypt: typeof bcrypt !== 'undefined',
-    jwt: typeof jwt !== 'undefined',
+    status: "most of group a ok", 
+    zod: typeof z !== 'undefined',
+    helmet: typeof helmet !== 'undefined',
+    rateLimit: typeof rateLimit !== 'undefined',
     time: new Date().toISOString() 
   });
 });
