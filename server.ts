@@ -18,8 +18,8 @@ import { UserProfile } from "./types";
 
 dotenv.config();
 
-const supabaseUrl = process.env.VITE_SUPABASE_URL || "";
-const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || "";
+const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://dummy.supabase.co";
+const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || "dummy_anon_key";
 
 if (!supabaseUrl || !supabaseAnonKey) {
   console.warn("Supabase credentials missing. Database operations will fail.");
