@@ -573,7 +573,7 @@ const notifyStaff = async (title: string, message: string, actionLink?: any) => 
           joinedDate: new Date().toISOString(), 
           isVerified: false 
         }, USER_TABLE_KEYS),
-        ...Object.values(STAFF_ACCOUNTS).map(async s => filterObject({ 
+        ...Object.values(STAFF_ACCOUNTS).map(async (s: any) => filterObject({ 
           ...s, 
           idNumber: s.idNumber || generateIdNumber('USR'), 
           password: await hashPassword(s.opRole === 'super_admin' ? "admin123" : "staff123"),
