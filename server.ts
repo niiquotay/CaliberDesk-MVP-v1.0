@@ -12,13 +12,13 @@ import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
 import { createClient } from "@supabase/supabase-js";
-import { MOCK_USER, MOCK_EMPLOYER, STAFF_ACCOUNTS, MOCK_JOBS, MOCK_BLOG_POSTS, MOCK_APTITUDE_TESTS } from "./constants";
-import { UserProfile } from "./types";
+import { MOCK_USER, MOCK_EMPLOYER, STAFF_ACCOUNTS, MOCK_JOBS, MOCK_BLOG_POSTS, MOCK_APTITUDE_TESTS } from "./constants.js";
+import { UserProfile } from "./types.js";
 
 dotenv.config();
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://ghpnirzdfxtxkwmqifld.supabase.co";
-const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || "dummy_anon_key";
+const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || "sb_publishable__NZL22B4reM7xUpOFPKqRQ_gcgGjw3M";
 
 if (!supabaseUrl || !supabaseAnonKey) {
   console.warn("Supabase credentials missing. Database operations will fail.");
@@ -1579,8 +1579,8 @@ const notifyStaff = async (title: string, message: string, actionLink?: any) => 
     res.json(app);
   });
 
-  const __filename = fileURLToPath(import.meta.url);
-  const __dirname = path.dirname(__filename);
+  const __filename = typeof import.meta !== 'undefined' && import.meta.url ? fileURLToPath(import.meta.url) : '';
+  const __dirname = __filename ? path.dirname(__filename) : process.cwd();
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
@@ -1609,7 +1609,7 @@ const notifyStaff = async (title: string, message: string, actionLink?: any) => 
       console.error("Vite initialization failed:", viteError);
     }
   } else {
-    const distPath = path.resolve(__dirname, "dist");
+    const distPath = path.resolve(process.cwd(), "dist");
     app.use(express.static(distPath));
     app.get("*", (req, res) => {
       res.sendFile(path.resolve(distPath, "index.html"));
