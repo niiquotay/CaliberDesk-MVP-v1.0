@@ -1293,18 +1293,36 @@ const App: React.FC = () => {
       isActive: true,
       ...alertData
     };
+    const updatedAlerts = [...(user.alerts || []), newAlert];
     setUser(prev => ({
       ...prev,
-      alerts: [...(prev.alerts || []), newAlert]
+      alerts: updatedAlerts
     }));
+
+    // Persist to backend
+    fetch('/api/user/profile', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ alerts: updatedAlerts })
+    }).catch(err => console.error("Failed to persist job alert:", err));
+
     setToast({ message: "Job Alert Manifest Synchronized", type: 'success' });
   };
 
   const handleDeleteAlert = (id: string) => {
+    const updatedAlerts = (user.alerts || []).filter(a => a.id !== id);
     setUser(prev => ({
       ...prev,
-      alerts: (prev.alerts || []).filter(a => a.id !== id)
+      alerts: updatedAlerts
     }));
+
+    // Persist to backend
+    fetch('/api/user/profile', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ alerts: updatedAlerts })
+    }).catch(err => console.error("Failed to delete job alert:", err));
+
     setToast({ message: "Alert Criterion Purged", type: 'info' });
   };
 

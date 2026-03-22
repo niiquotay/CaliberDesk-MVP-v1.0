@@ -262,7 +262,14 @@ const SeekerFeed: React.FC<SeekerFeedProps> = ({
                   </div>
                 </button>
               </div>
-              <button onClick={() => onOpenAlerts(searchQuery, filters.country, filters.minSalary)} className="p-3 rounded-xl bg-white/5 text-[#F0C927] border border-white/10 hover:bg-white/10 transition-all shadow-md active:scale-95 flex items-center justify-center h-11 w-11"><Bell size={20} /></button>
+              <button 
+                onClick={() => onOpenAlerts(searchQuery, filters.country, filters.minSalary)} 
+                className={`flex items-center justify-center gap-2 px-3 md:px-4 h-11 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all shadow-md active:scale-95 ${searchQuery || filters.country ? 'bg-[#F0C927] text-[#0a4179] border-[#F0C927] animate-pulse-subtle shadow-[#F0C927]/20' : 'bg-white/5 text-[#F0C927] border-white/10 hover:bg-white/10'}`}
+                title="Save this search as a job alert"
+              >
+                <Bell size={18} />
+                {(searchQuery || filters.country) && <span className="hidden sm:inline">Save Alert</span>}
+              </button>
             </>
           )}
           <button onClick={() => setShowFilters(!showFilters)} className={`flex items-center justify-center gap-2 px-3.5 md:px-6 h-11 rounded-xl text-xs font-black uppercase tracking-widest border transition-all ${showFilters || activeFilterCount > 0 ? 'bg-[#F0C927] text-[#0a4179] border-[#F0C927] shadow-lg' : 'bg-white/5 text-white/40 border-white/10'}`}>
