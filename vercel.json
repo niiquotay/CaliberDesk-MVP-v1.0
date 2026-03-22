@@ -23,7 +23,7 @@
     },
     {
       "source": "/api/(.*)",
-      "destination": "/api/index_minimal.ts"
+      "destination": "/api/index.ts"
     },
     {
       "source": "/(.*)",
