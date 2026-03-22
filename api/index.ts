@@ -12,8 +12,8 @@ import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
 import { createClient } from "@supabase/supabase-js";
-import { MOCK_USER, MOCK_EMPLOYER, STAFF_ACCOUNTS, MOCK_JOBS, MOCK_BLOG_POSTS, MOCK_APTITUDE_TESTS } from "./constants.js";
-import { UserProfile } from "./types.js";
+import { MOCK_USER, MOCK_EMPLOYER, STAFF_ACCOUNTS, MOCK_JOBS, MOCK_BLOG_POSTS, MOCK_APTITUDE_TESTS } from "../constants.js";
+import { UserProfile } from "../types.js";
 
 dotenv.config();
 
@@ -1645,8 +1645,10 @@ process.on("uncaughtException", (err) => {
   console.error("Uncaught Exception:", err);
 });
 
+/*
 startServer().catch(err => {
   console.error("Failed to start server:", err);
 });
+*/
 
 export default app;
