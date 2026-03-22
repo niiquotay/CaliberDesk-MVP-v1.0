@@ -2,16 +2,16 @@ import crypto from "crypto";
 import express from "express";
 import path from "path";
 import fs from "fs";
-import cors from "cors";
-import helmet from "helmet";
-import { z } from "zod";
-import rateLimit from "express-rate-limit";
+// import cors from "cors";
+// import helmet from "helmet";
+// import { z } from "zod";
+// import rateLimit from "express-rate-limit";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import cookieParser from "cookie-parser";
 import { fileURLToPath } from "url";
 import dotenv from "dotenv";
-import { GoogleGenerativeAI } from "@google/genai";
+// import { GoogleGenerativeAI } from "@google/genai";
 import { createClient } from "@supabase/supabase-js";
 import { MOCK_USER } from '../constants.js';
 
@@ -23,11 +23,9 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 app.get('/api/test', async (req, res) => {
   res.status(200).json({ 
-    status: "full import test ok", 
-    zod: typeof z !== 'undefined',
-    helmet: typeof helmet !== 'undefined',
-    rateLimit: typeof rateLimit !== 'undefined',
-    googleGenAI: typeof GoogleGenerativeAI !== 'undefined',
+    status: "group b list ok", 
+    bcrypt: typeof bcrypt !== 'undefined',
+    jwt: typeof jwt !== 'undefined',
     time: new Date().toISOString() 
   });
 });
