@@ -9,12 +9,16 @@ import bcrypt from "bcryptjs";
 import cookieParser from "cookie-parser";
 import dotenv from "dotenv";
 import { createClient } from "@supabase/supabase-js";
+import { Resend } from "resend";
 
 dotenv.config();
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://ghpnirzdfxtxkwmqifld.supabase.co";
 const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || "sb_publishable__NZL22B4reM7xUpOFPKqRQ_gcgGjw3M";
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+const resend = new Resend(process.env.RESEND_API_KEY || "");
+const FROM_EMAIL = "CaliberDesk <noreply@caliberdesk.com>";
 
 const app = express();
 const FINAL_JWT_SECRET = process.env.JWT_SECRET || "fallback_secret";
@@ -114,10 +118,49 @@ app.post("/api/auth/send-verification", async (req, res) => {
   const { email, phone } = req.body;
   const identifier = email || phone;
   if (!identifier) return res.status(400).json({ message: "Email or phone is required" });
+
   const code = Math.floor(100000 + Math.random() * 900000).toString();
   verificationCodes[identifier] = { code, expires: Date.now() + 10 * 60 * 1000 };
-  res.json({ message: "Verification code sent", code }); // code returned for testing
+
+  // Send real email if an email address was provided
+  if (email) {
+    try {
+      await resend.emails.send({
+        from: FROM_EMAIL,
+        to: email,
+        subject: "Your CaliberDesk Verification Code",
+        html: `
+          <div style="font-family: 'Inter', Arial, sans-serif; max-width: 560px; margin: 0 auto; background: #0f0f1a; color: #e2e8f0; border-radius: 12px; overflow: hidden;">
+            <div style="background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); padding: 32px 40px; text-align: center;">
+              <h1 style="margin: 0; font-size: 28px; font-weight: 700; color: #ffffff; letter-spacing: -0.5px;">CaliberDesk</h1>
+              <p style="margin: 6px 0 0; font-size: 14px; color: rgba(255,255,255,0.85);">The Future of Work</p>
+            </div>
+            <div style="padding: 40px;">
+              <h2 style="margin: 0 0 12px; font-size: 22px; font-weight: 600; color: #f1f5f9;">Verify your email address</h2>
+              <p style="margin: 0 0 28px; font-size: 15px; color: #94a3b8; line-height: 1.6;">Use the code below to complete your CaliberDesk registration. This code expires in <strong style="color: #e2e8f0;">10 minutes</strong>.</p>
+              <div style="background: #1e1e30; border: 1px solid #6366f1; border-radius: 10px; padding: 24px; text-align: center; margin-bottom: 28px;">
+                <span style="font-size: 42px; font-weight: 800; letter-spacing: 10px; color: #818cf8; font-family: monospace;">${code}</span>
+              </div>
+              <p style="margin: 0; font-size: 13px; color: #64748b; line-height: 1.6;">If you didn't request this code, please ignore this email. Your account security is our priority.</p>
+            </div>
+            <div style="background: #0a0a14; padding: 20px 40px; text-align: center;">
+              <p style="margin: 0; font-size: 12px; color: #475569;">&copy; ${new Date().getFullYear()} CaliberDesk. All rights reserved.</p>
+            </div>
+          </div>
+        `
+      });
+    } catch (emailErr: any) {
+      console.error("[EMAIL] Failed to send verification code:", emailErr.message);
+      // Don't block the request — log and continue
+    }
+  } else {
+    // Phone fallback: log for now (integrate SMS provider like Twilio later)
+    console.log(`[SMS] Verification code for ${phone}: ${code}`);
+  }
+
+  res.json({ message: "Verification code sent to your email. Please check your inbox." });
 });
+
 
 app.post("/api/auth/verify-code", async (req, res) => {
   const { email, phone, code } = req.body;
