@@ -22,7 +22,6 @@ const AuthGate: React.FC<AuthGateProps> = ({ initialRole = 'seeker', onSelectSee
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [companyName, setCompanyName] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
   const [isSendingCode, setIsSendingCode] = useState(false);
@@ -92,7 +91,6 @@ const AuthGate: React.FC<AuthGateProps> = ({ initialRole = 'seeker', onSelectSee
           email, 
           password, 
           isEmployer: role === 'employer',
-          companyName: role === 'employer' ? companyName : undefined,
           verificationCode: role === 'seeker' ? verificationCode : undefined
         }),
       });
@@ -120,7 +118,7 @@ const AuthGate: React.FC<AuthGateProps> = ({ initialRole = 'seeker', onSelectSee
     setError(null);
     
     try {
-      const redirectTo = `${window.location.origin}/signin?role=${role}`;
+      const redirectTo = `${window.location.origin}/${role === 'employer' ? 'employer' : 'seeker'}?role=${role}`;
       
       if (provider === 'Google') {
         const { error } = await supabase.auth.signInWithOAuth({
@@ -274,25 +272,6 @@ const AuthGate: React.FC<AuthGateProps> = ({ initialRole = 'seeker', onSelectSee
               <User className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20 group-focus-within:text-[#F0C927]/40 transition-colors" size={20} />
             </div>
           </div>
-
-          {role === 'employer' && (
-            <div className="space-y-2 animate-in slide-in-from-top-4 duration-500">
-              <label className="text-[10px] font-black uppercase tracking-widest text-white/40 px-2 flex items-center gap-2">
-                <Building2 size={12} className="text-[#41d599]/40" /> Organization Name
-              </label>
-              <div className="relative group">
-                <input 
-                  type="text" 
-                  value={companyName}
-                  onChange={e => setCompanyName(e.target.value)}
-                  required
-                  className="w-full bg-white/[0.03] border border-white/10 rounded-2xl py-4 pl-12 pr-6 text-sm font-bold outline-none transition-all duration-300 placeholder:text-white/10 shadow-inner focus:border-[#41d599]/50 focus:bg-white/[0.05]"
-                  placeholder="Acme Corp"
-                />
-                <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20 group-focus-within:text-[#41d599]/40 transition-colors" size={20} />
-              </div>
-            </div>
-          )}
 
           <div className="space-y-2">
             <label className="text-[10px] font-black uppercase tracking-widest text-white/40 px-2 flex items-center gap-2">

@@ -1,4 +1,4 @@
-import { Job, UserProfile, Transaction, OperationalRole, AptitudeTest, Application, BlogPost, CaliberEvent } from './types.js';
+import { Job, UserProfile, Transaction, OperationalRole, AptitudeTest, Application, BlogPost, CaliberEvent } from './types.ts';
 
 export const ALL_COUNTRIES = [
   "Afghanistan", "Albania", "Algeria", "Andorra", "Angola", "Antigua and Barbuda", "Argentina", "Armenia", "Australia", "Austria", "Azerbaijan",

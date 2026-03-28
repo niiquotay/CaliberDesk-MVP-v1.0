@@ -1,9 +1,0 @@
-{
-  "name": "CaliberDesk MVP v1.0",
-  "description": "A next-generation social hiring platform featuring AI Match Scores, Video Intros, an Employer AI Copilot, and an integrated Editorial Blog for industry insights.",
-  "requestFramePermissions": [
-    "camera",
-    "microphone",
-    "geolocation"
-  ]
-}

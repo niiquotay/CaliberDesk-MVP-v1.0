@@ -12,8 +12,8 @@ import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
 import { createClient } from "@supabase/supabase-js";
-import { MOCK_USER, MOCK_EMPLOYER, STAFF_ACCOUNTS, MOCK_JOBS, MOCK_BLOG_POSTS, MOCK_APTITUDE_TESTS } from "./constants.js";
-import { UserProfile } from "./types.js";
+import { MOCK_USER, MOCK_EMPLOYER, STAFF_ACCOUNTS, MOCK_JOBS, MOCK_BLOG_POSTS, MOCK_APTITUDE_TESTS } from "./constants.ts";
+import { UserProfile } from "./types.ts";
 
 dotenv.config();
 
@@ -27,6 +27,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 const app = express();
+app.set('trust proxy', 1);
 const PORT = 3000;
 const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -46,6 +47,8 @@ app.use(helmet({
 const allowedOrigins = [
   process.env.APP_URL,
   process.env.SHARED_APP_URL,
+  'https://www.caliberdesk.com',
+  'https://caliber-desk-mvp-v1-0.vercel.app',
   'http://localhost:3000',
   'http://localhost:5173'
 ].filter(Boolean);
@@ -350,14 +353,14 @@ const notifyStaff = async (title: string, message: string, actionLink?: any) => 
           const diffHours = (now.getTime() - matchedAt.getTime()) / (1000 * 60 * 60);
 
           // Check if user already applied
-          const { data: app } = await supabase
+          const { data: application } = await supabase
             .from('applications')
             .select('id')
             .eq('userId', user.id)
             .eq('jobId', reminder.jobId)
             .single();
 
-          if (app) {
+          if (application) {
             // User applied, remove reminder
             updatedReminders.splice(i, 1);
             i--;
@@ -992,7 +995,7 @@ const notifyStaff = async (title: string, message: string, actionLink?: any) => 
           isSuperUser: isEmployer
         };
 
-        const userToInsert = { ...newUser, id: crypto.randomUUID() };
+        const userToInsert = { ...newUser, id: sbUser.id };
         const { data: inserted, error: insertError } = await supabase.from('users').insert([userToInsert]).select().single();
         if (insertError) throw insertError;
         user = inserted;
@@ -1203,24 +1206,99 @@ const notifyStaff = async (title: string, message: string, actionLink?: any) => 
       return res.status(403).json({ message: "Only employers can post jobs" });
     }
 
-    const { data: user } = await supabase.from('users').select('id, companyName').eq('email', req.user.email).single();
-    
-    const newJob = {
-      ...req.body,
-      postedBy: user?.id,
-      company: user?.companyName || req.body.company,
-      postedAt: new Date().toISOString(),
-      idNumber: req.body.idNumber || generateIdNumber('JOB'),
-      status: 'active'
-    };
+    const {
+      title,
+      description,
+      location,
+      city,
+      country,
+      category,
+      allowedCountries,
+      salary,
+      salaryStructure,
+      responsibilities,
+      requirements,
+      tags,
+      benefits,
+      expiryDate,
+      isPremium,
+      isQuickHire,
+      isShortlistService,
+      isProfessionalHiring,
+      applicationType,
+      externalApplyUrl,
+      industry,
+      aptitudeTestId,
+      idealCandidateDefinition,
+      roleDefinition
+    } = req.body;
 
-    const { data: insertedJob, error } = await supabase.from('jobs').insert([newJob]).select().single();
-    if (error) {
-      console.error("Failed to post job:", error);
-      return res.status(500).json({ message: "An unexpected error occurred. Please try again later." });
+    // Basic Validation
+    if (!title || !description || !location || !city || !country || !salary) {
+      return res.status(400).json({ message: "Missing required fields: title, description, location, city, country, and salary are mandatory." });
     }
-    
-    res.json(insertedJob);
+
+    try {
+      // Fetch employer details
+      const { data: user, error: userError } = await supabase
+        .from('users')
+        .select('id, companyName, logoUrl, companyDescription')
+        .eq('email', req.user.email)
+        .single();
+      
+      if (userError || !user) {
+        return res.status(404).json({ message: "Employer profile not found" });
+      }
+
+      const newJob = {
+        title,
+        description,
+        location, // Onsite, Remote, Hybrid
+        city,
+        country,
+        category,
+        allowedCountries: allowedCountries || [country],
+        salary,
+        salaryStructure: salaryStructure || 'Fixed',
+        responsibilities,
+        requirements,
+        tags: tags || [],
+        benefits: benefits || [],
+        expiryDate: expiryDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // Default 30 days
+        isPremium: isPremium || false,
+        isQuickHire: isQuickHire || false,
+        isShortlistService: isShortlistService || false,
+        isProfessionalHiring: isProfessionalHiring || false,
+        applicationType: applicationType || 'in-app',
+        externalApplyUrl: applicationType === 'external' ? externalApplyUrl : null,
+        industry,
+        aptitudeTestId,
+        idealCandidateDefinition,
+        roleDefinition,
+        postedBy: user.id,
+        company: user.companyName,
+        logoUrl: user.logoUrl,
+        postedAt: new Date().toISOString(),
+        idNumber: generateIdNumber('JOB'),
+        status: 'active'
+      };
+
+      const { data: insertedJob, error } = await supabase
+        .from('jobs')
+        .insert([newJob])
+        .select()
+        .single();
+
+      if (error) {
+        console.error("Failed to post job:", error);
+        return res.status(500).json({ message: "Failed to save job to database." });
+      }
+      
+      res.status(201).json(insertedJob);
+    } catch (err) {
+      console.error("Unexpected error in job posting:", err);
+      res.status(500).json({ message: "An unexpected error occurred. Please try again later." });
+    }
   });
 
   // Blog Routes
@@ -1509,8 +1587,8 @@ const notifyStaff = async (title: string, message: string, actionLink?: any) => 
         .eq('jobId', job.id);
       
       if (apps) {
-        for (const app of apps) {
-          const user = app.users;
+        for (const applicationItem of apps) {
+          const user = applicationItem.users;
           if (!user) continue;
 
           const closeMsg = `The job "${job.title}" at ${job.company} has officially closed for applications. The employer will reach out to you directly if you are successful. Thank you for applying!`;
@@ -1541,7 +1619,7 @@ const notifyStaff = async (title: string, message: string, actionLink?: any) => 
     if (status) updateData.status = status;
     if (dueDate) updateData.dueDate = dueDate;
 
-    const { data: app, error } = await supabase
+    const { data: application, error } = await supabase
       .from('applications')
       .update(updateData)
       .eq('id', req.params.id)
@@ -1555,8 +1633,8 @@ const notifyStaff = async (title: string, message: string, actionLink?: any) => 
 
     // If status updated, notify seeker
     if (status) {
-      const user = app.users;
-      const job = app.jobs;
+      const user = application.users;
+      const job = application.jobs;
       if (user && job) {
         const statusMsg = `Your application for ${job.title} at ${job.company} has been updated to: ${status.toUpperCase()}.`;
         const notifications = user.notifications || [];
@@ -1576,7 +1654,7 @@ const notifyStaff = async (title: string, message: string, actionLink?: any) => 
       }
     }
 
-    res.json(app);
+    res.json(application);
   });
 
   const __filename = typeof import.meta !== 'undefined' && import.meta.url ? fileURLToPath(import.meta.url) : '';
@@ -1594,7 +1672,7 @@ const notifyStaff = async (title: string, message: string, actionLink?: any) => 
       app.use(vite.middlewares);
       
       // Fallback for SPA routes in dev mode
-      app.get("*", async (req, res, next) => {
+      app.get("*all", async (req, res, next) => {
         if (req.originalUrl.startsWith("/api")) return next();
         try {
           const template = fs.readFileSync(path.resolve(__dirname, "index.html"), "utf-8");
@@ -1611,7 +1689,7 @@ const notifyStaff = async (title: string, message: string, actionLink?: any) => 
   } else {
     const distPath = path.resolve(process.cwd(), "dist");
     app.use(express.static(distPath));
-    app.get("*", (req, res) => {
+    app.get("*all", (req, res) => {
       res.sendFile(path.resolve(distPath, "index.html"));
     });
   }

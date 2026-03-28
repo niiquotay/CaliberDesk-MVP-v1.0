@@ -295,7 +295,7 @@ const SignIn: React.FC<SignInProps> = ({ onSignIn, onBack, initialIsEmployer = f
     setError(null);
     
     try {
-      const redirectTo = `${window.location.origin}/signin?role=${isEmployer ? 'employer' : 'seeker'}`;
+      const redirectTo = `${window.location.origin}/${isEmployer ? 'employer' : 'seeker'}?role=${isEmployer ? 'employer' : 'seeker'}`;
       
       if (provider === 'Google') {
         const { error } = await supabase.auth.signInWithOAuth({
