@@ -27,7 +27,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 const app = express();
-app.set('trust proxy', 1);
+app.set('trust proxy', true);
 const PORT = 3000;
 const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -40,7 +40,8 @@ const FINAL_JWT_SECRET = JWT_SECRET || "fallback_secret";
 // Security Headers
 app.use(helmet({
   contentSecurityPolicy: false, // Disable CSP for development with Vite
-  crossOriginEmbedderPolicy: false
+  crossOriginEmbedderPolicy: false,
+  crossOriginResourcePolicy: { policy: "cross-origin" } // Allow assets to be loaded from different origins
 }));
 
 // Resilient CORS for development and production
@@ -1672,7 +1673,7 @@ const notifyStaff = async (title: string, message: string, actionLink?: any) => 
       app.use(vite.middlewares);
       
       // Fallback for SPA routes in dev mode
-      app.get("*all", async (req, res, next) => {
+      app.get("(.*)", async (req, res, next) => {
         if (req.originalUrl.startsWith("/api")) return next();
         try {
           const template = fs.readFileSync(path.resolve(__dirname, "index.html"), "utf-8");
@@ -1689,15 +1690,32 @@ const notifyStaff = async (title: string, message: string, actionLink?: any) => 
   } else {
     const distPath = path.resolve(process.cwd(), "dist");
     app.use(express.static(distPath));
-    app.get("*all", (req, res) => {
+    app.get("(.*)", (req, res) => {
+      if (req.path.startsWith('/api')) {
+        return res.status(404).json({ message: "API route not found" });
+      }
       res.sendFile(path.resolve(distPath, "index.html"));
     });
   }
 
   // Global error handler
   app.use((err: any, req: any, res: any, next: any) => {
-    console.error("Global Error Handler:", err);
-    res.status(500).json({ message: "An unexpected error occurred. Please try again later." });
+    const status = err.status || err.statusCode || 500;
+    const message = err.message || "An unexpected error occurred. Please try again later.";
+    
+    console.error(`[ERROR] ${req.method} ${req.path} - Status: ${status} - Message: ${message}`);
+    if (err.stack) console.error(err.stack);
+    
+    // Ensure we always return JSON for API routes
+    if (req.path.startsWith('/api')) {
+      return res.status(status).json({ 
+        message,
+        error: process.env.NODE_ENV === 'development' ? err : undefined
+      });
+    }
+    
+    // For non-API routes, let the default handler or SPA fallback handle it
+    next(err);
   });
 
 const startServer = async () => {
