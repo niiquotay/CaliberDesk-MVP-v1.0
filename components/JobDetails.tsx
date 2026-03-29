@@ -101,6 +101,16 @@ const JobDetails: React.FC<JobDetailsProps> = ({ job, allJobs, user, application
                  <span className="text-[9px] font-bold text-white/50 tracking-wide flex items-center gap-1.5"><MapPin size={12} className="text-[#F0C927]" /> {job.city}, {job.country}</span>
               </div>
            </div>
+           {user.isEmployer && (job.postedBy === user.id || isAdminView) && (
+              <div className="flex gap-2 shrink-0">
+                <button 
+                  onClick={() => onEdit?.(job)} 
+                  className="px-8 py-3 rounded-xl bg-purple-500 text-white font-bold tracking-wide text-[11px] shadow-2xl shadow-purple-500/20 hover:scale-[1.02] active:scale-95 transition-all duration-300 flex items-center gap-2"
+                >
+                  <Edit size={16} /> Edit Job Posting
+                </button>
+              </div>
+            )}
            {!user.isEmployer && !isAdminView && (
              <div className="flex gap-2 shrink-0">
                 {isApplied ? (

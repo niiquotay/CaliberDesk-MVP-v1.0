@@ -698,12 +698,60 @@ const notifyStaff = async (title: string, message: string, actionLink?: any) => 
     keyGenerator: (req) => req.body.email || req.ip
   });
 
-  app.post("/api/auth/reset-password", passwordResetLimiter, async (req, res, next) => {
+  app.post("/api/auth/forgot-password", passwordResetLimiter, async (req, res, next) => {
     try {
       const { email } = req.body;
       if (!email) return res.status(400).json({ message: "Email is required" });
-      // Mock password reset logic
-      res.json({ message: "Password reset link sent if email exists." });
+      
+      // Check if user exists
+      const { data: user, error } = await supabase
+        .from('users')
+        .select('id')
+        .eq('email', email.toLowerCase())
+        .maybeSingle();
+
+      if (error) throw error;
+      
+      // We always return success to prevent email enumeration
+      if (user) {
+        const code = Math.floor(100000 + Math.random() * 900000).toString();
+        verificationCodes[email.toLowerCase()] = {
+          code,
+          expires: Date.now() + 15 * 60 * 1000 // 15 minutes
+        };
+        console.log(`Password reset code for ${email}: ${code}`);
+      }
+
+      res.json({ message: "If an account exists with this email, a reset code has been sent." });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post("/api/auth/reset-password", passwordResetLimiter, async (req, res, next) => {
+    try {
+      const { email, code, newPassword } = req.body;
+      if (!email || !code || !newPassword) {
+        return res.status(400).json({ message: "Email, code, and new password are required" });
+      }
+
+      const record = verificationCodes[email.toLowerCase()];
+      if (!record || record.code !== code || record.expires < Date.now()) {
+        return res.status(400).json({ message: "Invalid or expired reset code" });
+      }
+
+      const hashedPassword = await hashPassword(newPassword);
+      
+      // Update in Supabase users table
+      const { error: updateError } = await supabase
+        .from('users')
+        .update({ password: hashedPassword })
+        .eq('email', email.toLowerCase());
+
+      if (updateError) throw updateError;
+
+      delete verificationCodes[email.toLowerCase()];
+      res.json({ message: "Password has been reset successfully. You can now log in." });
     } catch (error) {
       next(error);
     }
@@ -931,7 +979,7 @@ const notifyStaff = async (title: string, message: string, actionLink?: any) => 
 
       const { data: { user: sbUser }, error: sbError } = await supabase.auth.getUser(access_token);
       if (sbError || !sbUser) {
-        return res.status(401).json({ message: "Invalid Supabase session" });
+        return res.status(401).json({ message: "Invalid session" });
       }
 
       const email = sbUser.email?.toLowerCase();
@@ -981,41 +1029,8 @@ const notifyStaff = async (title: string, message: string, actionLink?: any) => 
         }
       }
 
-      // If still no user, create a new one
       if (!user) {
-        const isEmployer = intendedIsEmployer !== undefined ? !!intendedIsEmployer : false;
-        const newUser = {
-          name: sbUser.user_metadata.full_name || sbUser.user_metadata.name || email?.split('@')[0],
-          email,
-          isEmployer: isEmployer,
-          isVerified: !isEmployer, // Seekers are verified by default via social, Employers need manual verification
-          role: isEmployer ? "Employer" : "Seeker",
-          joinedDate: new Date().toISOString(),
-          idNumber: generateIdNumber(isEmployer ? 'CMP' : 'SKR'),
-          profileCompleted: false,
-          isSuperUser: isEmployer
-        };
-
-        const userToInsert = { ...newUser, id: sbUser.id };
-        const { data: inserted, error: insertError } = await supabase.from('users').insert([userToInsert]).select().single();
-        if (insertError) throw insertError;
-        user = inserted;
-
-        // Also insert into 'profiles' for consistency
-        await supabase.from('profiles').upsert({
-          id: user.id,
-          email: user.email,
-          last_sign_in: new Date(),
-          ...newUser
-        });
-
-        if (isEmployer) {
-          notifyStaff(
-            "New Employer Social Sign Up",
-            `A new employer ${user.name} (${email}) has signed up via social login and requires verification.`,
-            { view: 'admin', params: { tab: 'verifications' } }
-          );
-        }
+        return res.status(404).json({ message: "User account not found. Please register first." });
       }
 
       const token = jwt.sign({ email: user.email, isEmployer: user.isEmployer, isAdmin: user.isAdmin, role: user.role }, FINAL_JWT_SECRET, { expiresIn: "24h" });
@@ -1231,7 +1246,9 @@ const notifyStaff = async (title: string, message: string, actionLink?: any) => 
       industry,
       aptitudeTestId,
       idealCandidateDefinition,
-      roleDefinition
+      roleDefinition,
+      status,
+      id
     } = req.body;
 
     // Basic Validation
@@ -1251,7 +1268,7 @@ const notifyStaff = async (title: string, message: string, actionLink?: any) => 
         return res.status(404).json({ message: "Employer profile not found" });
       }
 
-      const newJob = {
+      const newJob: any = {
         title,
         description,
         location, // Onsite, Remote, Hybrid
@@ -1279,14 +1296,19 @@ const notifyStaff = async (title: string, message: string, actionLink?: any) => 
         postedBy: user.id,
         company: user.companyName,
         logoUrl: user.logoUrl,
-        postedAt: new Date().toISOString(),
-        idNumber: generateIdNumber('JOB'),
-        status: 'active'
+        status: status || 'active'
       };
+
+      if (id) {
+        newJob.id = id;
+      } else {
+        newJob.postedAt = new Date().toISOString();
+        newJob.idNumber = generateIdNumber('JOB');
+      }
 
       const { data: insertedJob, error } = await supabase
         .from('jobs')
-        .insert([newJob])
+        .upsert([newJob])
         .select()
         .single();
 

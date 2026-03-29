@@ -1095,8 +1095,10 @@ const App: React.FC = () => {
           return [savedJob, ...prev];
         });
         setEditingJob(null);
-        setToast({ message: "Job posted successfully", type: 'success' });
-        processJobAutomations(savedJob).catch(err => console.error("processJobAutomations unhandled error:", err));
+        setToast({ message: savedJob.status === 'draft' ? "Job saved as draft" : "Job posted successfully", type: 'success' });
+        if (savedJob.status !== 'draft') {
+          processJobAutomations(savedJob).catch(err => console.error("processJobAutomations unhandled error:", err));
+        }
       } else {
         setToast({ message: "Failed to post job", type: 'error' });
       }

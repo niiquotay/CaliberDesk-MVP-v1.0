@@ -31,6 +31,8 @@ const SignIn: React.FC<SignInProps> = ({ onSignIn, onBack, initialIsEmployer = f
   const [verificationCode, setVerificationCode] = useState('');
   const [isEmployer, setIsEmployer] = useState(initialIsEmployer);
   const [isSignUp, setIsSignUp] = useState(false);
+  const [isForgotPassword, setIsForgotPassword] = useState(false);
+  const [forgotPasswordStep, setForgotPasswordStep] = useState(1); // 1: Email, 2: Code & New Password
   const [signUpStep, setSignUpStep] = useState(1); // 1: Basic, 2: Verification, 3: Sub-Users (Employer only)
   const [isLoading, setIsLoading] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
@@ -82,9 +84,54 @@ const SignIn: React.FC<SignInProps> = ({ onSignIn, onBack, initialIsEmployer = f
     setSubUsers(subUsers.filter((_, i) => i !== index));
   };
 
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setError(null);
+    try {
+      if (forgotPasswordStep === 1) {
+        const response = await fetch('/api/auth/forgot-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email }),
+        });
+        if (!response.ok) {
+          const data = await response.json();
+          throw new Error(data.message || "Failed to send reset code");
+        }
+        setForgotPasswordStep(2);
+      } else {
+        if (password !== confirmPassword) throw new Error("Passwords do not match.");
+        const response = await fetch('/api/auth/reset-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, code: verificationCode, newPassword: password }),
+        });
+        if (!response.ok) {
+          const data = await response.json();
+          throw new Error(data.message || "Failed to reset password");
+        }
+        setIsForgotPassword(false);
+        setForgotPasswordStep(1);
+        setError(null);
+        // Show success message
+        alert("Password reset successfully. You can now log in.");
+      }
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    if (isForgotPassword) {
+      await handleForgotPassword(e);
+      return;
+    }
+
     if (isSignUp && signUpStep === 1) {
       setIsLoading(true);
       setError(null);
@@ -382,45 +429,23 @@ const SignIn: React.FC<SignInProps> = ({ onSignIn, onBack, initialIsEmployer = f
           <>
             <div className="text-center mb-4">
               <h2 className="text-3xl font-black uppercase tracking-tight leading-none">
-                {isEmployer ? "Employer Access" : "Seeker Access"}
+                {isForgotPassword ? "Reset Password" : (isEmployer ? "Employer Access" : "Seeker Access")}
               </h2>
               <p className="text-white/30 text-[9px] font-black uppercase tracking-[0.4em] mt-2">
-                {isSignUp ? "Neural registration v5.0" : "Neural verification v5.0"}
+                {isForgotPassword ? "Neural recovery v5.0" : (isSignUp ? "Neural registration v5.0" : "Neural verification v5.0")}
               </p>
             </div>
 
-            <div className="grid grid-cols-2 gap-4 mb-4">
-              <button 
-                onClick={() => handleSocialLogin('Google')} 
-                disabled={isLoading}
-                className="flex items-center justify-center gap-3 bg-white/5 border border-white/10 hover:bg-white/10 py-2.5 rounded-2xl transition-all active:scale-95 group disabled:opacity-50 shadow-xl"
-              >
-                <svg className="w-4 h-4" viewBox="0 0 24 24">
-                  <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                  <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                  <path fill="currentColor" d="M5.84 14.1c-.22-.66-.35-1.36-.35-2.1s.13-1.44.35-2.1V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l3.66-2.84z" />
-                  <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
-                </svg>
-                <span className="text-[10px] font-black uppercase tracking-widest text-white/40 group-hover:text-white transition-colors">Google</span>
-              </button>
-              <button 
-                onClick={() => handleSocialLogin('LinkedIn')} 
-                disabled={isLoading}
-                className="flex items-center justify-center gap-3 bg-white/5 border border-white/10 hover:bg-white/10 py-2.5 rounded-2xl transition-all active:scale-95 group disabled:opacity-50 shadow-xl"
-              >
-                <Linkedin size={18} className="text-[#0077b5]" />
-                <span className="text-[10px] font-black uppercase tracking-widest text-white/40 group-hover:text-white transition-colors">LinkedIn</span>
-              </button>
-            </div>
-
-            <div className="relative mb-4">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-white/5"></div>
+            {!isForgotPassword && (
+              <div className="relative mb-4">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-white/5"></div>
+                </div>
+                <div className="relative flex justify-center text-[8px] font-black uppercase tracking-[0.4em]">
+                  <span className="bg-[#0a4179] px-4 text-white/10 italic">use credentials</span>
+                </div>
               </div>
-              <div className="relative flex justify-center text-[8px] font-black uppercase tracking-[0.4em]">
-                <span className="bg-[#0a4179] px-4 text-white/10 italic">or use credentials</span>
-              </div>
-            </div>
+            )}
 
             {error && (
               <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-3 flex items-center gap-3 mb-4 animate-in slide-in-from-top-4 shadow-lg ring-1 ring-red-500/20">
@@ -676,7 +701,36 @@ const SignIn: React.FC<SignInProps> = ({ onSignIn, onBack, initialIsEmployer = f
                 </div>
               )}
 
-              {signUpStep === 1 && (
+              {isForgotPassword && forgotPasswordStep === 2 && (
+                <div className="space-y-4 animate-in slide-in-from-right-4 duration-500">
+                  <div className="text-center space-y-2">
+                    <div className="w-16 h-16 rounded-3xl bg-[#F0C927]/10 flex items-center justify-center text-[#F0C927] mx-auto mb-3 shadow-2xl ring-1 ring-[#F0C927]/20">
+                      <ShieldCheck size={40} />
+                    </div>
+                    <h3 className="text-xl font-black uppercase tracking-tight">Enter Reset Code</h3>
+                    <p className="text-[9px] text-white/30 uppercase font-black tracking-[0.3em] leading-relaxed">
+                      Enter the 6-digit code sent to <br />
+                      <span className="text-white/60">{email}</span>
+                    </p>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="relative">
+                      <input 
+                        type="text" 
+                        maxLength={6}
+                        value={verificationCode}
+                        onChange={(e) => setVerificationCode(e.target.value)}
+                        required
+                        className="w-full bg-white/[0.03] border border-white/10 rounded-2xl py-4 text-center text-3xl font-black tracking-[0.6em] outline-none transition-all duration-300 placeholder:text-white/5 shadow-inner focus:border-[#F0C927]/50 focus:bg-white/[0.05]"
+                        placeholder="000000"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {(!isForgotPassword || forgotPasswordStep === 1) && signUpStep === 1 && (
                 <>
                   <div className="space-y-2">
                     <label className="text-[10px] font-black uppercase tracking-widest text-white/40 px-2 flex items-center gap-2">
@@ -695,21 +749,46 @@ const SignIn: React.FC<SignInProps> = ({ onSignIn, onBack, initialIsEmployer = f
                     </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-center px-2">
-                      <label className="text-[10px] font-black uppercase tracking-widest text-white/40 flex items-center gap-2">
-                        <Lock size={12} className="text-[#F0C927]/40" /> Password
-                      </label>
-                      {!isSignUp && (
+                  {!isSignUp && !isForgotPassword && (
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center px-2">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-white/40 flex items-center gap-2">
+                          <Lock size={12} className="text-[#F0C927]/40" /> Password
+                        </label>
                         <button 
                           type="button" 
-                          onClick={() => setError("Password recovery system is currently offline. Please contact support.")}
+                          onClick={() => {
+                            setIsForgotPassword(true);
+                            setForgotPasswordStep(1);
+                            setError(null);
+                          }}
                           className="text-[9px] font-black uppercase text-[#F0C927]/60 hover:text-[#F0C927] transition-colors hover:underline underline-offset-4"
                         >
                           Forgot?
                         </button>
-                      )}
+                      </div>
+                      <div className="relative group">
+                        <input 
+                          type="password" 
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          required
+                          className="w-full bg-white/[0.03] border border-white/10 rounded-2xl py-3 pl-12 pr-6 text-sm font-bold outline-none transition-all duration-300 placeholder:text-white/10 shadow-inner focus:border-[#F0C927]/50 focus:bg-white/[0.05]"
+                          placeholder="••••••••"
+                        />
+                        <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20 group-focus-within:text-[#F0C927]/40 transition-colors" size={20} />
+                      </div>
                     </div>
+                  )}
+                </>
+              )}
+
+              {isForgotPassword && forgotPasswordStep === 2 && (
+                <div className="space-y-4 animate-in slide-in-from-right-4 duration-500">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-white/40 px-2 flex items-center gap-2">
+                      <Lock size={12} className="text-[#F0C927]/40" /> New Password
+                    </label>
                     <div className="relative group">
                       <input 
                         type="password" 
@@ -723,24 +802,60 @@ const SignIn: React.FC<SignInProps> = ({ onSignIn, onBack, initialIsEmployer = f
                     </div>
                   </div>
 
-                  {isSignUp && (
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black uppercase tracking-widest text-white/40 px-2 flex items-center gap-2">
-                        <ShieldCheck size={12} className="text-[#F0C927]/40" /> Confirm Password
-                      </label>
-                      <div className="relative group">
-                        <input 
-                          type="password" 
-                          value={confirmPassword}
-                          onChange={(e) => setConfirmPassword(e.target.value)}
-                          required
-                          className="w-full bg-white/[0.03] border border-white/10 rounded-2xl py-3 pl-12 pr-6 text-sm font-bold outline-none transition-all duration-300 placeholder:text-white/10 shadow-inner focus:border-[#F0C927]/50 focus:bg-white/[0.05]"
-                          placeholder="••••••••"
-                        />
-                        <ShieldCheck className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20 group-focus-within:text-[#F0C927]/40 transition-colors" size={20} />
-                      </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-white/40 px-2 flex items-center gap-2">
+                      <ShieldCheck size={12} className="text-[#F0C927]/40" /> Confirm New Password
+                    </label>
+                    <div className="relative group">
+                      <input 
+                        type="password" 
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        required
+                        className="w-full bg-white/[0.03] border border-white/10 rounded-2xl py-3 pl-12 pr-6 text-sm font-bold outline-none transition-all duration-300 placeholder:text-white/10 shadow-inner focus:border-[#F0C927]/50 focus:bg-white/[0.05]"
+                        placeholder="••••••••"
+                      />
+                      <ShieldCheck className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20 group-focus-within:text-[#F0C927]/40 transition-colors" size={20} />
                     </div>
-                  )}
+                  </div>
+                </div>
+              )}
+
+              {!isForgotPassword && isSignUp && signUpStep === 1 && (
+                <>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-white/40 px-2 flex items-center gap-2">
+                      <Lock size={12} className="text-[#F0C927]/40" /> Password
+                    </label>
+                    <div className="relative group">
+                      <input 
+                        type="password" 
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        required
+                        className="w-full bg-white/[0.03] border border-white/10 rounded-2xl py-3 pl-12 pr-6 text-sm font-bold outline-none transition-all duration-300 placeholder:text-white/10 shadow-inner focus:border-[#F0C927]/50 focus:bg-white/[0.05]"
+                        placeholder="••••••••"
+                      />
+                      <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20 group-focus-within:text-[#F0C927]/40 transition-colors" size={20} />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-white/40 px-2 flex items-center gap-2">
+                      <ShieldCheck size={12} className="text-[#F0C927]/40" /> Confirm Password
+                    </label>
+                    <div className="relative group">
+                      <input 
+                        type="password" 
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        required
+                        className="w-full bg-white/[0.03] border border-white/10 rounded-2xl py-3 pl-12 pr-6 text-sm font-bold outline-none transition-all duration-300 placeholder:text-white/10 shadow-inner focus:border-[#F0C927]/50 focus:bg-white/[0.05]"
+                        placeholder="••••••••"
+                      />
+                      <ShieldCheck className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20 group-focus-within:text-[#F0C927]/40 transition-colors" size={20} />
+                    </div>
+                  </div>
 
                   <div className="flex items-center justify-between px-2 py-2 bg-white/[0.02] border border-white/5 rounded-2xl">
                     <div className="flex items-center gap-3">
@@ -762,6 +877,26 @@ const SignIn: React.FC<SignInProps> = ({ onSignIn, onBack, initialIsEmployer = f
                 </>
               )}
 
+              {!isForgotPassword && !isSignUp && signUpStep === 1 && (
+                <div className="flex items-center justify-between px-2 py-2 bg-white/[0.02] border border-white/5 rounded-2xl">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center transition-colors ${isEmployer ? 'bg-[#F0C927]/20 text-[#F0C927]' : 'bg-white/5 text-white/20'}`}>
+                      <Briefcase size={16} />
+                    </div>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-white/60">
+                      Employer Access
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsEmployer(!isEmployer)}
+                    className={`w-12 h-6 rounded-full transition-all relative ${isEmployer ? 'bg-[#F0C927]' : 'bg-white/10'}`}
+                  >
+                    <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow-lg transition-all ${isEmployer ? 'left-7' : 'left-1'}`}></div>
+                  </button>
+                </div>
+              )}
+
               <button 
                 type="submit" 
                 disabled={isLoading}
@@ -771,22 +906,34 @@ const SignIn: React.FC<SignInProps> = ({ onSignIn, onBack, initialIsEmployer = f
                     : 'bg-[#F0C927] text-[#0a4179] shadow-[#F0C927]/30'
                 }`}
               >
-                {isLoading ? <Loader2 className="animate-spin" size={20} /> : (isSignUp ? (signUpStep < (isEmployer ? 3 : 2) ? <ArrowRight size={20} /> : <Sparkles size={20} />) : <LogIn size={20} />)}
-                {isLoading ? "Synchronizing..." : (isSignUp ? (signUpStep === 1 ? "Next: Verify" : signUpStep === 2 ? (isEmployer ? "Next: Users" : "Create Identity") : "Create Identity") : "Authorize Session")}
+                {isLoading ? <Loader2 className="animate-spin" size={20} /> : (
+                  isForgotPassword ? (forgotPasswordStep === 1 ? <ArrowRight size={20} /> : <Sparkles size={20} />) :
+                  (isSignUp ? (signUpStep < (isEmployer ? 3 : 2) ? <ArrowRight size={20} /> : <Sparkles size={20} />) : <LogIn size={20} />)
+                )}
+                {isLoading ? "Synchronizing..." : (
+                  isForgotPassword ? (forgotPasswordStep === 1 ? "Send Reset Code" : "Reset Password") :
+                  (isSignUp ? (signUpStep === 1 ? "Next: Verify" : signUpStep === 2 ? (isEmployer ? "Next: Users" : "Create Identity") : "Create Identity") : "Authorize Session")
+                )}
               </button>
 
-              <div className="text-center pt-2">
+              <div className="text-center pt-2 flex flex-col gap-2">
                 <button
                   type="button"
                   onClick={() => {
-                    setIsSignUp(!isSignUp);
-                    setSignUpStep(1);
+                    if (isForgotPassword) {
+                      setIsForgotPassword(false);
+                      setForgotPasswordStep(1);
+                    } else {
+                      setIsSignUp(!isSignUp);
+                      setSignUpStep(1);
+                    }
+                    setError(null);
                   }}
                   className="text-[10px] font-black uppercase tracking-[0.2em] text-white/30 hover:text-[#F0C927] transition-all duration-300"
                 >
-                  {isSignUp ? "Authorized? " : "New Identity? "}
+                  {isForgotPassword ? "Back to " : (isSignUp ? "Authorized? " : "New Identity? ")}
                   <span className="text-[#F0C927] underline underline-offset-8 decoration-[#F0C927]/30 font-black">
-                    {isSignUp ? "Sign In Here" : "Register Here"}
+                    {isForgotPassword ? "Sign In" : (isSignUp ? "Sign In Here" : "Register Here")}
                   </span>
                 </button>
               </div>
