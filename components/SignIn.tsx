@@ -285,12 +285,11 @@ const SignIn: React.FC<SignInProps> = ({ onSignIn, onBack, initialIsEmployer = f
 
       if (authError) throw authError;
 
-      // 2. Directly update the 'profiles' table (and 'users' table for backward compatibility)
+      // 2. Directly update the 'users' table
       if (authData.user) {
-        const profileData = { 
+        const userData = { 
           id: authData.user.id, 
           email: authData.user.email,
-          last_sign_in: new Date(),
           firstName,
           middleName,
           lastName,
@@ -306,18 +305,10 @@ const SignIn: React.FC<SignInProps> = ({ onSignIn, onBack, initialIsEmployer = f
           idNumber: `SKR-${Math.floor(10000 + Math.random() * 90000)}` // Simple ID generation for client-side
         };
 
-        // Update 'profiles' table as requested
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .upsert(profileData);
-        
-        if (profileError) console.error("Profiles sync failed:", profileError.message);
-
-        // Also update 'users' table to ensure the rest of the app continues to work
         const { error: userError } = await supabase
           .from('users')
           .upsert({
-            ...profileData,
+            ...userData,
             password: '', // Don't store password in plain text, Supabase Auth handles it
             subUsers: isEmployer ? subUsers : []
           });

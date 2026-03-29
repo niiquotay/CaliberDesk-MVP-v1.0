@@ -69,7 +69,8 @@ const registerSchema = z.object({
   country: z.string().optional().default(""),
   companyName: z.string().optional(),
   subUsers: z.array(z.any()).optional(),
-  verificationCode: z.string().optional()
+  verificationCode: z.string().optional(),
+  verificationToken: z.string().optional()
 });
 
 // --- Helpers ---
@@ -120,7 +121,7 @@ app.post("/api/auth/send-verification", async (req, res) => {
   if (!identifier) return res.status(400).json({ message: "Email or phone is required" });
 
   const code = Math.floor(100000 + Math.random() * 900000).toString();
-  verificationCodes[identifier] = { code, expires: Date.now() + 10 * 60 * 1000 };
+  const token = jwt.sign({ identifier, code }, FINAL_JWT_SECRET, { expiresIn: '10m' });
 
   // Send real email if an email address was provided
   if (email) {
@@ -158,17 +159,23 @@ app.post("/api/auth/send-verification", async (req, res) => {
     console.log(`[SMS] Verification code for ${phone}: ${code}`);
   }
 
-  res.json({ message: "Verification code sent to your email. Please check your inbox." });
+  res.json({ message: "Verification code sent to your email. Please check your inbox.", verificationToken: token });
 });
 
 
 app.post("/api/auth/verify-code", async (req, res) => {
-  const { email, phone, code } = req.body;
+  const { email, phone, code, verificationToken } = req.body;
   const identifier = email || phone;
-  const record = verificationCodes[identifier];
-  if (!record || record.code !== code || record.expires < Date.now()) return res.status(400).json({ message: "Invalid or expired code" });
-  delete verificationCodes[identifier];
-  res.json({ message: "Code verified successfully" });
+  if (!verificationToken) return res.status(400).json({ message: "Verification session missing, please resend code." });
+  try {
+    const decoded = jwt.verify(verificationToken, FINAL_JWT_SECRET) as any;
+    if (decoded.identifier !== identifier || decoded.code !== code) {
+      return res.status(400).json({ message: "Invalid verification code" });
+    }
+    res.json({ message: "Code verified successfully" });
+  } catch (err) {
+    return res.status(400).json({ message: "Expired or invalid verification code" });
+  }
 });
 
 app.post("/api/auth/register", authLimiter, async (req, res) => {
@@ -176,14 +183,19 @@ app.post("/api/auth/register", authLimiter, async (req, res) => {
     const validation = registerSchema.safeParse(req.body);
     if (!validation.success) return res.status(400).json({ message: "Invalid input", errors: (validation.error as any).errors });
 
-    const { firstName, middleName, lastName, email, password, isEmployer, phone, country, companyName, subUsers, verificationCode } = validation.data;
+    const { firstName, middleName, lastName, email, password, isEmployer, phone, country, companyName, subUsers, verificationCode, verificationToken } = validation.data;
     const name = `${firstName} ${middleName ? middleName + ' ' : ''}${lastName}`;
 
     if (!isEmployer) {
-      if (!verificationCode) return res.status(400).json({ message: "Verification code is required for seeker registration." });
-      const record = verificationCodes[email];
-      if (!record || record.code !== verificationCode || record.expires < Date.now()) return res.status(400).json({ message: "Invalid or expired verification code." });
-      delete verificationCodes[email];
+      if (!verificationCode || !verificationToken) return res.status(400).json({ message: "Verification code is required for seeker registration." });
+      try {
+        const decoded = jwt.verify(verificationToken, FINAL_JWT_SECRET) as any;
+        if (decoded.identifier !== email || decoded.code !== verificationCode) {
+          return res.status(400).json({ message: "Invalid verification code." });
+        }
+      } catch (err) {
+        return res.status(400).json({ message: "Expired or invalid verification code." });
+      }
     }
 
     if (isEmployer && !companyName) return res.status(400).json({ message: "Company name is required for employer accounts." });
