@@ -5,13 +5,13 @@ import { Job, UserProfile, Message } from '../types';
 import { Send, User, Bot, Loader2, X, Sparkles, MessageSquare, Award, Target, Brain } from 'lucide-react';
 import Markdown from 'react-markdown';
 
-interface AIInterviewerProps {
+interface AutomatedInterviewerProps {
   job: Job;
   user: UserProfile;
   onClose: () => void;
 }
 
-const AIInterviewer: React.FC<AIInterviewerProps> = ({ job, user, onClose }) => {
+const AutomatedInterviewer: React.FC<AutomatedInterviewerProps> = ({ job, user, onClose }) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -33,7 +33,7 @@ const AIInterviewer: React.FC<AIInterviewerProps> = ({ job, user, onClose }) => 
     try {
       const ai = new GoogleGenAI({ apiKey: getApiKey() });
       const prompt = `
-        You are an expert AI Interviewer for a company hiring for the position of ${job.title} at ${job.company}.
+        You are an expert Automated Interviewer for a company hiring for the position of ${job.title} at ${job.company}.
         
         Job Description:
         ${job.description}
@@ -120,7 +120,7 @@ const AIInterviewer: React.FC<AIInterviewerProps> = ({ job, user, onClose }) => 
               <Brain size={24} />
             </div>
             <div>
-              <h2 className="text-xl font-black tracking-tight">AI Interviewer</h2>
+              <h2 className="text-xl font-black tracking-tight">Automated Interviewer</h2>
               <p className="text-[10px] font-bold uppercase tracking-widest text-white/40">Simulating interview for {job.title}</p>
             </div>
           </div>
@@ -140,7 +140,7 @@ const AIInterviewer: React.FC<AIInterviewerProps> = ({ job, user, onClose }) => 
             <div className="max-w-md space-y-4">
               <h3 className="text-2xl font-black">Ready for your simulation?</h3>
               <p className="text-sm text-white/60 leading-relaxed">
-                Our AI will conduct a realistic interview based on the <span className="text-[#F0C927] font-bold">{job.title}</span> role requirements and your professional profile.
+                Our system will conduct a realistic interview based on the <span className="text-[#F0C927] font-bold">{job.title}</span> role requirements and your professional profile.
               </p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full max-w-2xl">
@@ -189,7 +189,7 @@ const AIInterviewer: React.FC<AIInterviewerProps> = ({ job, user, onClose }) => 
                     </div>
                     <div className="p-4 rounded-2xl bg-white/5 border border-white/10 flex items-center gap-3">
                       <Loader2 size={16} className="animate-spin text-[#F0C927]" />
-                      <span className="text-[10px] font-black uppercase tracking-widest text-white/20">AI is thinking...</span>
+                      <span className="text-[10px] font-black uppercase tracking-widest text-white/20">Processing...</span>
                     </div>
                   </div>
                 </div>
@@ -216,7 +216,7 @@ const AIInterviewer: React.FC<AIInterviewerProps> = ({ job, user, onClose }) => 
                 </button>
               </div>
               <p className="text-[8px] text-center mt-4 text-white/20 font-bold uppercase tracking-tighter">
-                This is an AI simulation. Responses are generated for practice purposes only.
+                This is an automated simulation. Responses are generated for practice purposes only.
               </p>
             </div>
           </>
@@ -226,4 +226,4 @@ const AIInterviewer: React.FC<AIInterviewerProps> = ({ job, user, onClose }) => 
   );
 };
 
-export default AIInterviewer;
+export default AutomatedInterviewer;

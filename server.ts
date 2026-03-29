@@ -686,7 +686,8 @@ const notifyStaff = async (title: string, message: string, actionLink?: any) => 
     max: 10, // Limit each IP to 10 login/register attempts per window
     message: { message: "Too many authentication attempts, please try again after 15 minutes" },
     standardHeaders: true,
-    legacyHeaders: false
+    legacyHeaders: false,
+    // Use default keyGenerator which handles IPv6 correctly
   });
 
   const passwordResetLimiter = rateLimit({
@@ -695,7 +696,7 @@ const notifyStaff = async (title: string, message: string, actionLink?: any) => 
     message: { message: "Too many password reset requests, please try again after an hour" },
     standardHeaders: true,
     legacyHeaders: false,
-    keyGenerator: (req) => req.body.email || req.ip
+    // Use default keyGenerator which handles IPv6 correctly
   });
 
   app.post("/api/auth/forgot-password", passwordResetLimiter, async (req, res, next) => {
@@ -1695,7 +1696,7 @@ const notifyStaff = async (title: string, message: string, actionLink?: any) => 
       app.use(vite.middlewares);
       
       // Fallback for SPA routes in dev mode
-      app.get("(.*)", async (req, res, next) => {
+      app.get("*", async (req, res, next) => {
         if (req.originalUrl.startsWith("/api")) return next();
         try {
           const template = fs.readFileSync(path.resolve(__dirname, "index.html"), "utf-8");
@@ -1712,7 +1713,7 @@ const notifyStaff = async (title: string, message: string, actionLink?: any) => 
   } else {
     const distPath = path.resolve(process.cwd(), "dist");
     app.use(express.static(distPath));
-    app.get("(.*)", (req, res) => {
+    app.get("*", (req, res) => {
       if (req.path.startsWith('/api')) {
         return res.status(404).json({ message: "API route not found" });
       }

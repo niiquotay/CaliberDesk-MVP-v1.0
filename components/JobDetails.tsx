@@ -11,7 +11,7 @@ import {
 import Toast from './Toast';
 import { isJobActuallyActive } from '../constants';
 import { calculateProfileCompletion } from '../utils';
-import AIInterviewer from './AIInterviewer';
+import AutomatedInterviewer from './AutomatedInterviewer';
 import Profile from './Profile';
 import JobSearchGrounding from './JobSearchGrounding';
 
@@ -67,7 +67,7 @@ const JobDetails: React.FC<JobDetailsProps> = ({ job, allJobs, user, application
   return (
     <div className="max-w-5xl mx-auto space-y-4 pb-20 text-white animate-in fade-in duration-500 px-4 md:px-0">
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
-      {showInterviewer && <AIInterviewer job={job} user={user} onClose={() => setShowInterviewer(false)} />}
+      {showInterviewer && <AutomatedInterviewer job={job} user={user} onClose={() => setShowInterviewer(false)} />}
       
       <div className="flex items-center justify-between px-1">
         <button onClick={onBack} className="flex items-center gap-1.5 text-white/40 hover:text-white transition-colors group">
@@ -257,7 +257,7 @@ const JobDetails: React.FC<JobDetailsProps> = ({ job, allJobs, user, application
                  </div>
                ) : (
                  <div className="text-sm text-white/50">
-                   No definition provided yet. Define your ideal candidate to improve AI matching and ranking accuracy.
+                   No definition provided yet. Define your ideal candidate to improve smart matching and ranking accuracy.
                  </div>
                )}
                {onEdit && (
@@ -275,11 +275,11 @@ const JobDetails: React.FC<JobDetailsProps> = ({ job, allJobs, user, application
              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                  <button onClick={() => setShowInterviewer(true)} className="p-8 rounded-[2rem] bg-blue-500/5 border border-blue-500/20 flex flex-col items-center text-center gap-4 group hover:bg-blue-500/10 transition-all duration-500 shadow-xl">
                     <div className="w-12 h-12 rounded-2xl bg-blue-500/10 flex items-center justify-center text-blue-400 group-hover:scale-110 transition-transform duration-500 shadow-lg"><Brain size={24} /></div>
-                    <div><p className="text-xs font-bold tracking-wide">AI Interviewer</p><p className="text-[9px] text-white/30 font-bold mt-1">Simulate real interview</p></div>
+                    <div><p className="text-xs font-bold tracking-wide">Automated Interviewer</p><p className="text-[9px] text-white/30 font-bold mt-1">Simulate real interview</p></div>
                  </button>
                 <button onClick={onLaunchCoach} className="p-8 rounded-[2rem] bg-[#F0C927]/5 border border-[#F0C927]/20 flex flex-col items-center text-center gap-4 group hover:bg-[#F0C927]/10 transition-all duration-500 shadow-xl">
                    <div className="w-12 h-12 rounded-2xl bg-[#F0C927]/10 flex items-center justify-center text-[#F0C927] group-hover:scale-110 transition-transform duration-500 shadow-lg"><Zap size={24} /></div>
-                   <div><p className="text-xs font-bold tracking-wide">Consult AI Coach</p><p className="text-[9px] text-white/30 font-bold mt-1">Optimize pitch for this role</p></div>
+                   <div><p className="text-xs font-bold tracking-wide">Consult Smart Coach</p><p className="text-[9px] text-white/30 font-bold mt-1">Optimize pitch for this role</p></div>
                 </button>
              </div>
            )}
@@ -324,7 +324,7 @@ const JobDetails: React.FC<JobDetailsProps> = ({ job, allJobs, user, application
                   <tr>
                     <th className="px-4 py-4">Candidate</th>
                     <th className="px-4 py-4">Stage</th>
-                    <th className="px-4 py-4 text-center">AI Match</th>
+                    <th className="px-4 py-4 text-center">Smart Match</th>
                     <th className="px-4 py-4 text-right">Actions</th>
                   </tr>
                 </thead>

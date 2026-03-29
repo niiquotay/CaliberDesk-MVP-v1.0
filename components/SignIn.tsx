@@ -337,41 +337,6 @@ const SignIn: React.FC<SignInProps> = ({ onSignIn, onBack, initialIsEmployer = f
     }
   };
 
-  const handleSocialLogin = async (provider: 'Google' | 'LinkedIn') => {
-    setIsLoading(true);
-    setError(null);
-    
-    try {
-      const redirectTo = `${window.location.origin}/${isEmployer ? 'employer' : 'seeker'}?role=${isEmployer ? 'employer' : 'seeker'}`;
-      
-      if (provider === 'Google') {
-        const { error } = await supabase.auth.signInWithOAuth({
-          provider: 'google',
-          options: {
-            redirectTo,
-          },
-        });
-        if (error) throw error;
-        return; // Redirecting...
-      }
-
-      if (provider === 'LinkedIn') {
-        const { error } = await supabase.auth.signInWithOAuth({
-          provider: 'linkedin_oidc',
-          options: {
-            redirectTo,
-          },
-        });
-        if (error) throw error;
-        return; // Redirecting...
-      }
-    } catch (err: any) {
-      console.error(`${provider} login error:`, err);
-      setError(err.message || `Failed to sign in with ${provider}. Please try again.`);
-      setIsLoading(false);
-    }
-  };
-
   const handleStaffLoginShortcut = async (role: OperationalRole) => {
     setIsLoading(true);
     try {
@@ -432,7 +397,7 @@ const SignIn: React.FC<SignInProps> = ({ onSignIn, onBack, initialIsEmployer = f
                 {isForgotPassword ? "Reset Password" : (isEmployer ? "Employer Access" : "Seeker Access")}
               </h2>
               <p className="text-white/30 text-[9px] font-black uppercase tracking-[0.4em] mt-2">
-                {isForgotPassword ? "Neural recovery v5.0" : (isSignUp ? "Neural registration v5.0" : "Neural verification v5.0")}
+                {isForgotPassword ? "Account recovery v5.0" : (isSignUp ? "Account registration v5.0" : "Account verification v5.0")}
               </p>
             </div>
 
@@ -910,7 +875,7 @@ const SignIn: React.FC<SignInProps> = ({ onSignIn, onBack, initialIsEmployer = f
                   isForgotPassword ? (forgotPasswordStep === 1 ? <ArrowRight size={20} /> : <Sparkles size={20} />) :
                   (isSignUp ? (signUpStep < (isEmployer ? 3 : 2) ? <ArrowRight size={20} /> : <Sparkles size={20} />) : <LogIn size={20} />)
                 )}
-                {isLoading ? "Synchronizing..." : (
+                {isLoading ? "Connecting..." : (
                   isForgotPassword ? (forgotPasswordStep === 1 ? "Send Reset Code" : "Reset Password") :
                   (isSignUp ? (signUpStep === 1 ? "Next: Verify" : signUpStep === 2 ? (isEmployer ? "Next: Users" : "Create Identity") : "Create Identity") : "Authorize Session")
                 )}

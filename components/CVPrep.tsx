@@ -68,7 +68,7 @@ const CVPrep: React.FC<CVPrepProps> = ({ user, setUser, jobs, onBack }) => {
       setTailoredResume(result);
       setToast({ message: "Resume manifest tailored to job requirements.", type: 'success' });
     } catch (err) {
-      setToast({ message: "AI synthesis failed.", type: 'error' });
+      setToast({ message: "Smart synthesis failed.", type: 'error' });
     } finally {
       setIsGenerating(false);
     }
@@ -116,7 +116,7 @@ const CVPrep: React.FC<CVPrepProps> = ({ user, setUser, jobs, onBack }) => {
             <ArrowLeft size={20} className="group-hover:-translate-x-1 transition-transform" />
           </button>
           <div>
-            <h1 className="text-4xl font-black">AI CV Studio</h1>
+            <h1 className="text-4xl font-black">Smart CV Studio</h1>
             <p className="text-white/40 text-[10px] font-black uppercase tracking-widest mt-1">Tailor your professional trajectory manifest</p>
           </div>
         </div>
@@ -230,7 +230,7 @@ const CVPrep: React.FC<CVPrepProps> = ({ user, setUser, jobs, onBack }) => {
                 className="w-full py-4 rounded-2xl bg-[#F0C927] text-[#0a4179] font-black uppercase tracking-widest text-[10px] shadow-xl hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-3 disabled:opacity-50"
               >
                 {isGenerating ? <Loader2 size={16} className="animate-spin" /> : <Zap size={16} fill="currentColor" />}
-                Run AI Tailoring
+                Run Smart Tailoring
               </button>
            </section>
 

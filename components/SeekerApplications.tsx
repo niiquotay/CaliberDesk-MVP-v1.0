@@ -176,7 +176,7 @@ const SeekerApplications: React.FC<SeekerApplicationsProps> = ({
                         <div className="w-4 h-4 rounded-full bg-[#41d599]/20 border border-[#41d599]/40 flex items-center justify-center">
                           <CheckCircle2 size={8} className="text-[#41d599]" />
                         </div>
-                        <span className="text-[7px] font-black uppercase tracking-tighter text-white/40">AI Analysis</span>
+                        <span className="text-[7px] font-black uppercase tracking-tighter text-white/40">Smart Analysis</span>
                       </div>
                       <div className="w-4 h-px bg-white/10 shrink-0"></div>
                       <div className="flex items-center gap-1.5 shrink-0">

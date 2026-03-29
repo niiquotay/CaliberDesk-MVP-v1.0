@@ -63,7 +63,7 @@ const InterviewPrep: React.FC<InterviewPrepProps> = ({ user, jobs, onBack }) => 
     setCameraError(null);
     
     try {
-      // Initiate AI question synthesis and camera prep
+      // Initiate smart question synthesis and camera prep
       const qPromise = generateInterviewQuestions(job, user);
       
       // Wait for questions
@@ -74,7 +74,7 @@ const InterviewPrep: React.FC<InterviewPrepProps> = ({ user, jobs, onBack }) => 
       // Initialize camera immediately after stage switch
       await initCamera();
     } catch (err) {
-      setToast({ message: "Neural synthesis failed. Retrying sync...", type: 'error' });
+      setToast({ message: "Smart synthesis failed. Retrying sync...", type: 'error' });
       setStage('selection');
     } finally {
       setIsInitializing(false);
@@ -130,7 +130,7 @@ const InterviewPrep: React.FC<InterviewPrepProps> = ({ user, jobs, onBack }) => 
       setIsRecording(false);
       handleAnalyzeResponse().catch(err => {
         console.error("Analysis failed:", err);
-        setToast({ message: "Neural analysis failed. Please retry.", type: 'error' });
+        setToast({ message: "Smart analysis failed. Please retry.", type: 'error' });
       });
     }
   };
@@ -149,7 +149,7 @@ const InterviewPrep: React.FC<InterviewPrepProps> = ({ user, jobs, onBack }) => 
       });
       setStage('results');
     } catch (err) {
-      setToast({ message: "Neural analysis interrupted. Retrying synthesis...", type: 'error' });
+      setToast({ message: "Smart analysis interrupted. Retrying synthesis...", type: 'error' });
     } finally {
       setIsAnalyzing(false);
     }
@@ -201,7 +201,7 @@ const InterviewPrep: React.FC<InterviewPrepProps> = ({ user, jobs, onBack }) => 
             <div className="absolute -inset-4 border-2 border-dashed border-[#41d599]/20 rounded-[40px] animate-spin-slow"></div>
           </div>
           <div className="text-center space-y-3">
-            <h2 className="text-2xl font-black uppercase tracking-[0.2em] text-white">Neural <span className="text-[#41d599]">Calibration</span></h2>
+            <h2 className="text-2xl font-black uppercase tracking-[0.2em] text-white">System <span className="text-[#41d599]">Calibration</span></h2>
             <div className="flex flex-col items-center gap-2">
               <p className="text-xs text-white/40 font-bold uppercase tracking-widest flex items-center gap-2">
                 <Loader2 size={14} className="animate-spin" /> Synchronizing Interview Triggers
@@ -218,7 +218,7 @@ const InterviewPrep: React.FC<InterviewPrepProps> = ({ user, jobs, onBack }) => 
             <ArrowLeft size={20} className="group-hover:-translate-x-1 transition-transform" />
           </button>
           <div>
-            <h1 className="text-4xl font-black">AI Interview Simulator</h1>
+            <h1 className="text-4xl font-black">Automated Interview Simulator</h1>
             <p className="text-white/40 text-[10px] font-black uppercase tracking-widest mt-1">Refine your pitch with Gemini 3 Pro</p>
           </div>
         </div>
@@ -356,9 +356,9 @@ const InterviewPrep: React.FC<InterviewPrepProps> = ({ user, jobs, onBack }) => 
               <div className="w-20 h-20 rounded-3xl bg-[#41d599]/10 flex items-center justify-center text-[#41d599] border border-[#41d599]/20 shadow-2xl animate-pulse z-10">
                 <Brain size={40} />
               </div>
-              <h3 className="text-2xl font-black z-10">AI Analysis Protocols</h3>
+              <h3 className="text-2xl font-black z-10">Smart Analysis Protocols</h3>
               <p className="text-sm text-white/60 leading-relaxed max-w-xs z-10 font-medium">
-                Select specific neural evaluation layers to prioritize during your simulator session.
+                Select specific smart evaluation layers to prioritize during your simulator session.
               </p>
               <div className="flex flex-wrap justify-center gap-3 z-10">
                  <button 
@@ -374,7 +374,7 @@ const InterviewPrep: React.FC<InterviewPrepProps> = ({ user, jobs, onBack }) => 
                    STAR Grading
                  </button>
               </div>
-              <p className="text-[9px] text-white/20 font-black uppercase tracking-[0.2em] z-10">Toggle protocols to specialize AI focus</p>
+              <p className="text-[9px] text-white/20 font-black uppercase tracking-[0.2em] z-10">Toggle protocols to specialize system focus</p>
             </div>
           </div>
         </div>
@@ -424,7 +424,7 @@ const InterviewPrep: React.FC<InterviewPrepProps> = ({ user, jobs, onBack }) => 
                         <Loader2 size={56} className="text-[#41d599] animate-spin" />
                         <Sparkles size={20} className="absolute inset-0 m-auto text-[#F0C927] animate-pulse" />
                       </div>
-                      <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#41d599]">Neural Analysis in Progress...</p>
+                      <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#41d599]">Smart Analysis in Progress...</p>
                     </div>
                   )}
                 </>
@@ -457,7 +457,7 @@ const InterviewPrep: React.FC<InterviewPrepProps> = ({ user, jobs, onBack }) => 
                     <p className="text-xs text-white/60 leading-relaxed italic font-medium">
                       {activeProtocols.includes('STAR Grading') 
                         ? "Protocol 'STAR' enforced: Mention a specific Situation, your Task, the Action you took, and the quantifiable Result." 
-                        : "Focus on technical accuracy and maintaining professional confidence. Speak clearly for the neural model."}
+                        : "Focus on technical accuracy and maintaining professional confidence. Speak clearly for the smart model."}
                     </p>
                  </div>
                </div>
@@ -469,7 +469,7 @@ const InterviewPrep: React.FC<InterviewPrepProps> = ({ user, jobs, onBack }) => 
                  {activeProtocols.length > 0 ? activeProtocols.map(p => (
                    <span key={p} className="px-3 py-1.5 rounded-xl bg-[#41d599]/10 text-[#41d599] border border-[#41d599]/20 text-[9px] font-black uppercase tracking-widest flex items-center gap-2"><ShieldCheck size={12} /> {p}</span>
                  )) : (
-                   <span className="text-[10px] text-white/20 italic uppercase font-bold tracking-widest bg-white/5 px-4 py-2 rounded-xl border border-white/5">Standard Logic Model v4.2</span>
+                   <span className="text-[10px] text-white/20 italic uppercase font-bold tracking-widest bg-white/5 px-4 py-2 rounded-xl border border-white/5">Standard Smart Model v4.2</span>
                  )}
               </div>
             </div>
@@ -563,7 +563,7 @@ const InterviewPrep: React.FC<InterviewPrepProps> = ({ user, jobs, onBack }) => 
                     <div>
                        <p className="text-[11px] font-black uppercase tracking-[0.2em] text-white/60">Integrity Protocol</p>
                        <p className="text-[9px] font-bold text-white/20 uppercase tracking-widest mt-1">
-                         Analysis Methodology: {activeProtocols.length > 0 ? activeProtocols.join(' • ') : 'Standard Neural Logic Model'}
+                         Analysis Methodology: {activeProtocols.length > 0 ? activeProtocols.join(' • ') : 'Standard Smart Logic Model'}
                        </p>
                     </div>
                  </div>

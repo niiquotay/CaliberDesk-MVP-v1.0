@@ -302,7 +302,7 @@ const SeekerFeed: React.FC<SeekerFeedProps> = ({
             <Dropdown id="rank" label="Operational Rank" value={filters.jobRank} options={JOB_RANKS} onSelect={(val) => setFilters({...filters, jobRank: val})} refObj={dropdownRefs.rank} />
             <div className="space-y-1 col-span-full bg-white/[0.03] p-4 rounded-2xl border border-white/5">
               <div className="flex justify-between items-center ml-1">
-                <label className="text-[10px] font-black text-white/30 tracking-widest">AI Match Score</label>
+                <label className="text-[10px] font-black text-white/30 tracking-widest">Smart Match Score</label>
                 <span className="text-[10px] font-black text-[#F0C927]">{filters.minMatchScore}%+</span>
               </div>
               <div className="relative flex items-center h-8">
@@ -456,7 +456,7 @@ const SeekerFeed: React.FC<SeekerFeedProps> = ({
                           {job.matchScore ? `${job.matchScore}%` : (
                             <span className="flex items-center gap-1 text-[#F0C927] animate-pulse">
                               <Loader2 size={12} className="animate-spin" />
-                              <span className="text-[10px]">AI</span>
+                              <span className="text-[10px]">Smart</span>
                             </span>
                           )}
                         </span>
@@ -528,7 +528,7 @@ const SeekerFeed: React.FC<SeekerFeedProps> = ({
                               {job.matchScore ? `${job.matchScore}%` : (
                                 <span className="flex items-center gap-0.5 text-[#F0C927] animate-pulse">
                                   <Loader2 size={10} className="animate-spin" />
-                                  <span className="text-[8px]">AI</span>
+                                  <span className="text-[8px]">Smart</span>
                                 </span>
                               )}
                             </span>

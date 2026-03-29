@@ -251,7 +251,7 @@ const Settings: React.FC<SettingsProps> = ({ user, setUser, onUpgradeRequest, on
                      <span className="text-[#41d599] shadow-[0_0_10px_rgba(65,213,153,0.2)]">Verified</span>
                   </div>
                   <div className="flex justify-between text-[10px] font-black uppercase tracking-widest">
-                     <span className="text-white/20">AI Neural Link</span>
+                     <span className="text-white/20">Smart System Link</span>
                      <span className="text-blue-400 shadow-[0_0_10px_rgba(96,165,250,0.2)]">Stable</span>
                   </div>
                </div>

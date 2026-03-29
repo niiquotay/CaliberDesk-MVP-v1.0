@@ -30,13 +30,13 @@ const SubscriptionModal: React.FC<SubscriptionModalProps> = ({ type, upgradeFrom
   
   const seekerTiers: Tier[] = [
     { id: 'seeker_free', name: 'Regular User', price: 0, period: '', desc: 'Feed access.', perks: ['Standard Job Feed', 'Profile Builder', 'Basic Search'] },
-    { id: 'seeker_premium', name: 'Premium Seeker', price: 28, period: '/year', desc: 'AI edge search.', perks: ['AI Match Intelligence', 'Stealth Mode Privacy', 'AI Agency Auto-Apply', 'Priority Video Pitch'] },
+    { id: 'seeker_premium', name: 'Premium Seeker', price: 28, period: '/year', desc: 'Advanced edge search.', perks: ['Smart Match Intelligence', 'Stealth Mode Privacy', 'Automated Agency Auto-Apply', 'Priority Video Pitch'] },
   ];
 
   const employerTiers: Tier[] = [
     { id: 'employer_standard', name: 'Standard Post', price: 28, period: '/post', desc: 'Verified visibility.', perks: ['Standard Feed Placement', '7-Day Listing', 'Basic Applicant Tracking'] },
-    { id: 'employer_premium', name: 'Gold Tier Post', price: 100, period: '/post', desc: '10x visibility boost.', perks: ['Top-of-Feed Pinning', 'Gold Badge & Border', 'Direct Talent Alerts', 'Enhanced AI Candidate Rank'] },
-    { id: 'employer_shortlist', name: 'Shortlist', price: 250, period: '/post', desc: 'Fastest acquisition.', perks: ['24h Talent Delivery', 'AI Auto-Shortlisting', 'Video Screening Toolset', 'Dedicated Hiring Specialist'] },
+    { id: 'employer_premium', name: 'Gold Tier Post', price: 100, period: '/post', desc: '10x visibility boost.', perks: ['Top-of-Feed Pinning', 'Gold Badge & Border', 'Direct Talent Alerts', 'Enhanced Candidate Ranking'] },
+    { id: 'employer_shortlist', name: 'Shortlist', price: 250, period: '/post', desc: 'Fastest acquisition.', perks: ['24h Talent Delivery', 'Automated Shortlisting', 'Video Screening Toolset', 'Dedicated Hiring Specialist'] },
     { id: 'employer_professional', name: 'Elite Search', price: 0, isNegotiable: true, period: '', desc: 'Executive handling.', perks: ['End-to-end management', 'Negotiable Service Fee', 'Customer Service Concierge', 'Admin Managed Approval'] },
   ];
 
@@ -254,7 +254,7 @@ const SubscriptionModal: React.FC<SubscriptionModalProps> = ({ type, upgradeFrom
             </button>
             <div className="flex items-center justify-center gap-2 opacity-20">
                <ShieldCheck size={10} />
-               <p className="text-[7px] font-black uppercase tracking-[0.2em]">Neural Encryption Active • AES-256</p>
+               <p className="text-[7px] font-black uppercase tracking-[0.2em]">System Encryption Active • AES-256</p>
             </div>
           </div>
         </div>

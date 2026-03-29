@@ -56,7 +56,7 @@ const MatchDetails: React.FC<MatchDetailsProps> = ({ job, onClose }) => {
 
           <div className="bg-[#41d599]/10 border border-[#41d599]/20 rounded-2xl p-4 flex items-start gap-3">
             <CheckCircle2 className="text-[#41d599] mt-0.5" size={20} />
-            <p className="text-sm text-white/90">AI verified: Your profile strongly aligns with the core requirements of this role.</p>
+            <p className="text-sm text-white/90">System verified: Your profile strongly aligns with the core requirements of this role.</p>
           </div>
         </div>
       </div>

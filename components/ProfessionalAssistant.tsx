@@ -10,7 +10,7 @@ import { UserProfile, Job } from '../types';
 import { generateProfessionalDraft } from '../services/geminiService';
 import Toast from './Toast';
 
-interface ProfessionalAIAssistantProps {
+interface ProfessionalAssistantProps {
   user: UserProfile;
   jobs: Job[];
   onBack: () => void;
@@ -28,7 +28,7 @@ const TEMPLATES = [
   { id: 'general-other', name: 'Custom Message', icon: Layers, platforms: ['Email', 'LinkedIn', 'WhatsApp'], description: 'Bespoke professional comms.' },
 ];
 
-const ProfessionalAIAssistant: React.FC<ProfessionalAIAssistantProps> = ({ user, jobs, onBack, onUpgrade }) => {
+const ProfessionalAssistant: React.FC<ProfessionalAssistantProps> = ({ user, jobs, onBack, onUpgrade }) => {
   const [selectedTemplate, setSelectedTemplate] = useState(TEMPLATES[0]);
   const [platform, setPlatform] = useState(TEMPLATES[0].platforms[0]);
   const [context, setContext] = useState('');
@@ -46,7 +46,7 @@ const ProfessionalAIAssistant: React.FC<ProfessionalAIAssistantProps> = ({ user,
 
   const handleGenerate = async () => {
     if (!context.trim()) {
-      setToast({ message: "Context required for neural synthesis.", type: 'error' });
+      setToast({ message: "Context required for smart synthesis.", type: 'error' });
       return;
     }
 
@@ -71,9 +71,9 @@ const ProfessionalAIAssistant: React.FC<ProfessionalAIAssistantProps> = ({ user,
         jobContext
       );
       setDraft(result);
-      setToast({ message: "Intelligence manifest synthesized.", type: 'success' });
+      setToast({ message: "Smart message synthesized.", type: 'success' });
     } catch (err) {
-      setToast({ message: "Synthesis synchronization failed.", type: 'error' });
+      setToast({ message: "Smart synthesis failed.", type: 'error' });
     } finally {
       setIsGenerating(false);
     }
@@ -97,7 +97,7 @@ const ProfessionalAIAssistant: React.FC<ProfessionalAIAssistantProps> = ({ user,
       
       <div className="flex items-center justify-between shrink-0 px-4">
         <div>
-          <h1 className="text-4xl font-black tracking-tight">AI Comm Studio</h1>
+          <h1 className="text-4xl font-black tracking-tight">Smart Comm Studio</h1>
           <p className="text-white/30 text-[11px] font-black uppercase tracking-[0.25em] mt-1">Strategic Multi-Channel Drafting Environment • Enterprise v4.2</p>
         </div>
         <div className="flex items-center gap-4">
@@ -281,7 +281,7 @@ const ProfessionalAIAssistant: React.FC<ProfessionalAIAssistantProps> = ({ user,
                     <div className="w-10 h-10 rounded-xl bg-[#41d599]/10 flex items-center justify-center text-[#41d599] border border-[#41d599]/10"><MessageSquare size={22} /></div>
                     <div>
                       <h3 className="text-lg font-black uppercase tracking-widest">Synthesis Directives</h3>
-                      <p className="text-[10px] text-white/20 font-black uppercase tracking-widest mt-1">Provide specific context for the AI Agent</p>
+                      <p className="text-[10px] text-white/20 font-black uppercase tracking-widest mt-1">Provide specific context for the Smart Agent</p>
                     </div>
                   </div>
                   <div className="p-3 rounded-full bg-white/5 text-white/20 hover:text-[#F0C927] transition-all cursor-help">
@@ -302,7 +302,7 @@ const ProfessionalAIAssistant: React.FC<ProfessionalAIAssistantProps> = ({ user,
                 <div className="pt-8 border-t border-white/10 flex items-center justify-between gap-10">
                   <div className="flex items-center gap-4 text-xs font-black uppercase tracking-[0.2em] text-white/20">
                      <div className="w-2.5 h-2.5 rounded-full bg-[#41d599] animate-pulse"></div>
-                     Neural Sync Protocol Active
+                     Smart Sync Protocol Active
                   </div>
                   <button 
                     onClick={handleGenerate}
@@ -359,4 +359,4 @@ const ProfessionalAIAssistant: React.FC<ProfessionalAIAssistantProps> = ({ user,
   );
 };
 
-export default ProfessionalAIAssistant;
+export default ProfessionalAssistant;

@@ -13,7 +13,7 @@ interface CareerCoachProps {
 }
 
 const CareerCoach: React.FC<CareerCoachProps> = ({ user, isSubscribed, onUpgrade, currentJob, isOpen, setIsOpen }) => {
-  const [chatMode, setChatMode] = useState<'ai' | 'live'>('ai');
+  const [chatMode, setChatMode] = useState<'smart' | 'live'>('smart');
   const [aiMessages, setAiMessages] = useState<Message[]>([
     { role: 'model', text: `Greetings ${(user?.name || 'User').split(' ')[0]}. I'm your CALIBERDESK Support Agent. How can I assist you with our platform today?` }
   ]);
@@ -24,7 +24,7 @@ const CareerCoach: React.FC<CareerCoachProps> = ({ user, isSubscribed, onUpgrade
   const [isTyping, setIsTyping] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const currentMessages = chatMode === 'ai' ? aiMessages : liveMessages;
+  const currentMessages = chatMode === 'smart' ? aiMessages : liveMessages;
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -38,7 +38,7 @@ const CareerCoach: React.FC<CareerCoachProps> = ({ user, isSubscribed, onUpgrade
     
     const userMsg: Message = { role: 'user', text: input };
     
-    if (chatMode === 'ai') {
+    if (chatMode === 'smart') {
       const newMessages = [...aiMessages, userMsg];
       setAiMessages(newMessages);
       setInput('');
@@ -101,14 +101,14 @@ const CareerCoach: React.FC<CareerCoachProps> = ({ user, isSubscribed, onUpgrade
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-[#41d599]/10 flex items-center justify-center text-[#41d599]">
-                  {chatMode === 'ai' ? <Cpu size={20} /> : <ShieldCheck size={20} />}
+                  {chatMode === 'smart' ? <Cpu size={20} /> : <ShieldCheck size={20} />}
                 </div>
                 <div>
                   <h3 className="text-sm font-black text-white uppercase tracking-widest">
-                    {chatMode === 'ai' ? 'Support Agent' : 'Support Live'}
+                    {chatMode === 'smart' ? 'Support Agent' : 'Support Live'}
                   </h3>
                   <p className="text-[10px] text-[#41d599] font-bold uppercase tracking-widest">
-                    {chatMode === 'ai' ? 'System v4.2 Active' : 'Online • Admin Team'}
+                    {chatMode === 'smart' ? 'System v4.2 Active' : 'Online • Admin Team'}
                   </p>
                 </div>
               </div>
@@ -123,12 +123,12 @@ const CareerCoach: React.FC<CareerCoachProps> = ({ user, isSubscribed, onUpgrade
             {/* Mode Switch */}
             <div className="flex bg-white/5 rounded-xl p-1 border border-white/10">
               <button
-                onClick={() => setChatMode('ai')}
+                onClick={() => setChatMode('smart')}
                 className={`flex-1 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${
-                  chatMode === 'ai' ? 'bg-[#41d599] text-[#0a4179]' : 'text-white/50 hover:text-white'
+                  chatMode === 'smart' ? 'bg-[#41d599] text-[#0a4179]' : 'text-white/50 hover:text-white'
                 }`}
               >
-                AI Agent
+                Smart Agent
               </button>
               <button
                 onClick={() => setChatMode('live')}
@@ -163,7 +163,7 @@ const CareerCoach: React.FC<CareerCoachProps> = ({ user, isSubscribed, onUpgrade
               <div className="flex items-center gap-2 text-white/20">
                 <Loader2 size={12} className="animate-spin" />
                 <span className="text-[9px] font-black uppercase tracking-widest">
-                  {chatMode === 'ai' ? 'Agent is typing...' : 'Admin is typing...'}
+                  {chatMode === 'smart' ? 'Agent is typing...' : 'Admin is typing...'}
                 </span>
               </div>
             )}

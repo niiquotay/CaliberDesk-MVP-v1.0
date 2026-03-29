@@ -161,7 +161,7 @@ const Home: React.FC<HomeProps> = ({
               <div className="grid grid-cols-2 gap-2 mb-4 relative z-10">
                 {[
                   { label: 'Candidates Ranking', icon: Cpu },
-                  { label: 'AI Assisted Instant Shortlisting', icon: Award },
+                  { label: 'Automated Instant Shortlisting', icon: Award },
                   { label: 'Aptitude Testing', icon: FileCheck },
                   { label: 'Candidates Management', icon: BarChart3 }
                 ].map((item, i) => (

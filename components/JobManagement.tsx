@@ -463,7 +463,7 @@ const JobManagement: React.FC<JobManagementProps> = ({
     return sectionIValid && sectionIIValid && sectionIIIValid && sectionVValid && sectionVIIValid;
   }, [newJob, deploymentManifest, selectedCurrencyCode, salaryRaw]);
 
-  const handleAISupport = async (
+  const handleSmartSupport = async (
     field: "definition" | "responsibilities" | "requirements" | "summary" | "full_rewrite",
   ) => {
     if (!newJob.title) {
@@ -490,16 +490,16 @@ const JobManagement: React.FC<JobManagementProps> = ({
         type: "success",
       });
     } catch (err) {
-      setToast({ message: "AI generation failed.", type: "error" });
+      setToast({ message: "Automated generation failed.", type: "error" });
     } finally {
       setIsGenerating((prev) => ({ ...prev, [field]: false }));
     }
   };
 
-  const handleFullAIGeneration = async () => {
+  const handleFullSmartGeneration = async () => {
     if (!newJob.title) {
       setToast({
-        message: "Professional title required for AI Assistant.",
+        message: "Professional title required for Smart Assistant.",
         type: "error",
       });
       return;
@@ -522,7 +522,7 @@ const JobManagement: React.FC<JobManagementProps> = ({
 
       setToast({ message: "Job description generated successfully.", type: "success" });
     } catch (err) {
-      setToast({ message: "AI Assistant failed to generate content.", type: "error" });
+      setToast({ message: "Smart Assistant failed to generate content.", type: "error" });
     } finally {
       setIsGenerating((prev) => ({ ...prev, full: false }));
     }
@@ -1047,7 +1047,7 @@ const JobManagement: React.FC<JobManagementProps> = ({
                                 <Activity size={10} /> {job.matchScore || 82}%
                               </span>
                               <span className="flex items-center gap-1 text-blue-400">
-                                <Brain size={10} /> AI
+                                <Brain size={10} /> Smart
                               </span>
                             </div>
                           </div>
@@ -1221,7 +1221,7 @@ const JobManagement: React.FC<JobManagementProps> = ({
                 {modalStep === "form" && (
                   <>
                     <button
-                      onClick={handleFullAIGeneration}
+                      onClick={handleFullSmartGeneration}
                       disabled={isGenerating.full || !newJob.title}
                       className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#0a4179] text-white border border-[#0a4179]/20 text-[11px] font-bold tracking-wide hover:bg-[#0a4179]/90 transition-all shadow-sm disabled:opacity-50"
                     >
@@ -1230,7 +1230,7 @@ const JobManagement: React.FC<JobManagementProps> = ({
                       ) : (
                         <Sparkles size={12} className="text-[#41d599]" />
                       )}
-                      AI Assistant (Generate All)
+                      Smart Assistant (Generate All)
                     </button>
                     <button
                       onClick={() => jdUploadRef.current?.click()}
@@ -1833,11 +1833,11 @@ const JobManagement: React.FC<JobManagementProps> = ({
                           <span className="text-red-500">*</span>
                         </label>
                         <button
-                          onClick={() => handleAISupport("summary")}
+                          onClick={() => handleSmartSupport("summary")}
                           disabled={isGenerating.summary}
                           className="text-[10px] font-bold text-red-500 flex items-center gap-2.5 hover:underline"
                         >
-                          <Sparkles size={14} /> AI Draft
+                          <Sparkles size={14} /> Smart Draft
                         </button>
                       </div>
                       <textarea
@@ -1860,11 +1860,11 @@ const JobManagement: React.FC<JobManagementProps> = ({
                             <span className="text-red-500">*</span>
                           </label>
                           <button
-                            onClick={() => handleAISupport("responsibilities")}
+                            onClick={() => handleSmartSupport("responsibilities")}
                             disabled={isGenerating.responsibilities}
                             className="text-[10px] font-bold text-red-500 flex items-center gap-2.5 hover:underline"
                           >
-                            <Sparkles size={14} /> AI Draft
+                            <Sparkles size={14} /> Smart Draft
                           </button>
                         </div>
                         <textarea
@@ -1886,11 +1886,11 @@ const JobManagement: React.FC<JobManagementProps> = ({
                             <span className="text-red-500">*</span>
                           </label>
                           <button
-                            onClick={() => handleAISupport("requirements")}
+                            onClick={() => handleSmartSupport("requirements")}
                             disabled={isGenerating.requirements}
                             className="text-[10px] font-bold text-red-500 flex items-center gap-2.5 hover:underline"
                           >
-                            <Sparkles size={14} /> AI Draft
+                            <Sparkles size={14} /> Smart Draft
                           </button>
                         </div>
                         <textarea
@@ -1915,11 +1915,11 @@ const JobManagement: React.FC<JobManagementProps> = ({
                           </span>
                         </label>
                         <button
-                          onClick={() => handleAISupport("definition")}
+                          onClick={() => handleSmartSupport("definition")}
                           disabled={isGenerating.definition}
                           className="text-[10px] font-bold text-red-500 flex items-center gap-2.5 hover:underline"
                         >
-                          <Sparkles size={14} /> AI Draft
+                          <Sparkles size={14} /> Smart Draft
                         </button>
                       </div>
                       <textarea
@@ -1931,7 +1931,7 @@ const JobManagement: React.FC<JobManagementProps> = ({
                           })
                         }
                         className="w-full bg-slate-50 border border-slate-200 hover:border-blue-400 rounded-[2rem] p-6 text-sm text-slate-800 min-h-[200px] outline-none focus:border-blue-500 transition-all leading-relaxed font-medium shadow-inner"
-                        placeholder="Describe your ideal candidate in detail. This helps the AI rank applicants more accurately..."
+                        placeholder="Describe your ideal candidate in detail. This helps the system rank applicants more accurately..."
                       />
                     </div>
                     <div className="space-y-3">
@@ -2048,7 +2048,7 @@ const JobManagement: React.FC<JobManagementProps> = ({
                             <Check size={12} /> Standard Visibility
                           </li>
                           <li className="flex items-center gap-2 text-[10px] font-black uppercase text-slate-400">
-                            <Check size={12} /> Basic AI Matching
+                            <Check size={12} /> Smart Matching
                           </li>
                         </ul>
                       </button>
@@ -2505,7 +2505,7 @@ const JobManagement: React.FC<JobManagementProps> = ({
 
                 <section className="p-6 rounded-[24px] bg-[#F0C927]/5 border border-[#F0C927]/20 space-y-4 shadow-inner">
                   <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-[#F0C927] flex items-center gap-2">
-                    <Sparkles size={12} /> AI Candidate Insights
+                    <Sparkles size={12} /> Smart Candidate Insights
                   </h4>
                   <div className="flex items-center gap-4">
                     <div className="w-12 h-12 rounded-xl bg-[#F0C927]/10 flex items-center justify-center text-[#F0C927] font-black text-lg border border-[#F0C927]/20">

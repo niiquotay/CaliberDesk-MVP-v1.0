@@ -71,7 +71,7 @@ const EmployerCommAssistant: React.FC<EmployerCommAssistantProps> = ({ user, job
             <ArrowLeft size={20} className="group-hover:-translate-x-1 transition-transform" />
           </button>
           <div>
-            <h1 className="text-4xl font-black">Hiring Studio AI</h1>
+            <h1 className="text-4xl font-black">Smart Hiring Studio</h1>
             <p className="text-white/40 text-[10px] font-black uppercase tracking-widest mt-1">Strategic Drafting Suite & Acquisition Strategy Telemetry</p>
           </div>
         </div>
