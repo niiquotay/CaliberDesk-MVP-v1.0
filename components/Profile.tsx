@@ -228,7 +228,7 @@ const Profile: React.FC<ProfileProps> = ({ user, setUser, jobs = [], onBack }) =
                   {user.languages && user.languages.length > 0 && (
                      <div className="flex items-center gap-2 text-xs font-bold text-white/70">
                         <Globe size={14} className="text-blue-400" />
-                        {user.languages.join(', ')}
+                        {(user.languages || []).join(', ')}
                      </div>
                   )}
 
