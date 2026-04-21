@@ -42,7 +42,7 @@ const AutomatedInterviewer: React.FC<AutomatedInterviewerProps> = ({ job, user, 
         
         Candidate Profile:
         Name: ${user.name}
-        Skills: ${(user.skills || []).join(', ')}
+        Skills: ${user.skills.join(', ')}
         Experience Summary: ${user.experienceSummary}
         
         Your goal is to conduct a professional, insightful interview. 

@@ -180,7 +180,7 @@ const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ user, onComplete })
               <label className="text-[10px] font-black uppercase tracking-widest text-white/30 px-2">Skills (Comma separated)</label>
               <input 
                 type="text"
-                value={(formData.skills || []).join(', ')}
+                value={formData.skills.join(', ')}
                 onChange={e => updateField('skills', e.target.value.split(',').map((s: string) => s.trim()))}
                 className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 px-6 text-sm font-bold outline-none focus:border-[#F0C927]/50 transition-all"
                 placeholder="React, TypeScript, Node.js"

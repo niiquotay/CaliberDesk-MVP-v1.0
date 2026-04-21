@@ -15,10 +15,16 @@ interface SignInProps {
   initialIsEmployer?: boolean;
   initialShowStaffPortal?: boolean;
   onStaffPortalToggle?: (isStaff: boolean) => void;
+  initialIsForgotPassword?: boolean;
+  initialEmail?: string;
+  initialResetCode?: string;
 }
 
-const SignIn: React.FC<SignInProps> = ({ onSignIn, onBack, initialIsEmployer = false, initialShowStaffPortal = false, onStaffPortalToggle }) => {
-  const [email, setEmail] = useState('');
+const SignIn: React.FC<SignInProps> = ({ 
+  onSignIn, onBack, initialIsEmployer = false, initialShowStaffPortal = false, 
+  onStaffPortalToggle, initialIsForgotPassword = false, initialEmail = '', initialResetCode = '' 
+}) => {
+  const [email, setEmail] = useState(initialEmail);
   const [companyName, setCompanyName] = useState('');
   const [firstName, setFirstName] = useState('');
   const [middleName, setMiddleName] = useState('');
@@ -28,11 +34,11 @@ const SignIn: React.FC<SignInProps> = ({ onSignIn, onBack, initialIsEmployer = f
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [name, setName] = useState('');
-  const [verificationCode, setVerificationCode] = useState('');
+  const [verificationCode, setVerificationCode] = useState(initialResetCode);
   const [isEmployer, setIsEmployer] = useState(initialIsEmployer);
   const [isSignUp, setIsSignUp] = useState(false);
-  const [isForgotPassword, setIsForgotPassword] = useState(false);
-  const [forgotPasswordStep, setForgotPasswordStep] = useState(1); // 1: Email, 2: Code & New Password
+  const [isForgotPassword, setIsForgotPassword] = useState(initialIsForgotPassword);
+  const [forgotPasswordStep, setForgotPasswordStep] = useState(initialResetCode ? 2 : 1); // 1: Email, 2: Code & New Password
   const [signUpStep, setSignUpStep] = useState(1); // 1: Basic, 2: Verification, 3: Sub-Users (Employer only)
   const [isLoading, setIsLoading] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
@@ -128,6 +134,12 @@ const SignIn: React.FC<SignInProps> = ({ onSignIn, onBack, initialIsEmployer = f
     e.preventDefault();
     
     if (isForgotPassword) {
+      if (forgotPasswordStep === 2) {
+        const passwordRegex = /^(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#$%^&*(),.?":{}|<>]).{8,}$/;
+        if (!passwordRegex.test(password)) {
+          throw new Error("Password must be at least 8 characters long and contain at least one uppercase letter, one number, and one special character.");
+        }
+      }
       await handleForgotPassword(e);
       return;
     }
@@ -137,6 +149,11 @@ const SignIn: React.FC<SignInProps> = ({ onSignIn, onBack, initialIsEmployer = f
       setError(null);
       try {
         if (password !== confirmPassword) throw new Error("Passwords do not match.");
+        
+        const passwordRegex = /^(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#$%^&*(),.?":{}|<>]).{8,}$/;
+        if (!passwordRegex.test(password)) {
+          throw new Error("Password must be at least 8 characters long and contain at least one uppercase letter, one number, and one special character.");
+        }
         
         // Staff domain restriction for general sign-up
         if (email.toLowerCase().endsWith('@caliberdesk.com')) {
@@ -285,11 +302,12 @@ const SignIn: React.FC<SignInProps> = ({ onSignIn, onBack, initialIsEmployer = f
 
       if (authError) throw authError;
 
-      // 2. Directly update the 'users' table
+      // 2. Directly update the 'profiles' table (and 'users' table for backward compatibility)
       if (authData.user) {
-        const userData = { 
+        const profileData = { 
           id: authData.user.id, 
           email: authData.user.email,
+          last_sign_in: new Date(),
           firstName,
           middleName,
           lastName,
@@ -305,10 +323,18 @@ const SignIn: React.FC<SignInProps> = ({ onSignIn, onBack, initialIsEmployer = f
           idNumber: `SKR-${Math.floor(10000 + Math.random() * 90000)}` // Simple ID generation for client-side
         };
 
+        // Update 'profiles' table as requested
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .upsert(profileData);
+        
+        if (profileError) console.error("Profiles sync failed:", profileError.message);
+
+        // Also update 'users' table to ensure the rest of the app continues to work
         const { error: userError } = await supabase
           .from('users')
           .upsert({
-            ...userData,
+            ...profileData,
             password: '', // Don't store password in plain text, Supabase Auth handles it
             subUsers: isEmployer ? subUsers : []
           });
@@ -657,35 +683,6 @@ const SignIn: React.FC<SignInProps> = ({ onSignIn, onBack, initialIsEmployer = f
                 </div>
               )}
 
-              {isForgotPassword && forgotPasswordStep === 2 && (
-                <div className="space-y-4 animate-in slide-in-from-right-4 duration-500">
-                  <div className="text-center space-y-2">
-                    <div className="w-16 h-16 rounded-3xl bg-[#F0C927]/10 flex items-center justify-center text-[#F0C927] mx-auto mb-3 shadow-2xl ring-1 ring-[#F0C927]/20">
-                      <ShieldCheck size={40} />
-                    </div>
-                    <h3 className="text-xl font-black uppercase tracking-tight">Enter Reset Code</h3>
-                    <p className="text-[9px] text-white/30 uppercase font-black tracking-[0.3em] leading-relaxed">
-                      Enter the 6-digit code sent to <br />
-                      <span className="text-white/60">{email}</span>
-                    </p>
-                  </div>
-
-                  <div className="space-y-3">
-                    <div className="relative">
-                      <input 
-                        type="text" 
-                        maxLength={6}
-                        value={verificationCode}
-                        onChange={(e) => setVerificationCode(e.target.value)}
-                        required
-                        className="w-full bg-white/[0.03] border border-white/10 rounded-2xl py-4 text-center text-3xl font-black tracking-[0.6em] outline-none transition-all duration-300 placeholder:text-white/5 shadow-inner focus:border-[#F0C927]/50 focus:bg-white/[0.05]"
-                        placeholder="000000"
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-
               {(!isForgotPassword || forgotPasswordStep === 1) && signUpStep === 1 && (
                 <>
                   <div className="space-y-2">
@@ -742,6 +739,23 @@ const SignIn: React.FC<SignInProps> = ({ onSignIn, onBack, initialIsEmployer = f
               {isForgotPassword && forgotPasswordStep === 2 && (
                 <div className="space-y-4 animate-in slide-in-from-right-4 duration-500">
                   <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-[#F0C927] px-2 flex items-center gap-2">
+                      <ShieldCheck size={12} /> Verification Code from Email
+                    </label>
+                    <div className="relative group">
+                      <input 
+                        type="text" 
+                        value={verificationCode}
+                        onChange={(e) => setVerificationCode(e.target.value)}
+                        required
+                        className="w-full bg-white/[0.03] border border-[#F0C927]/30 rounded-2xl py-3 pl-12 pr-6 text-sm font-bold outline-none transition-all duration-300 placeholder:text-white/10 shadow-inner focus:border-[#F0C927]/50 focus:bg-white/[0.05]"
+                        placeholder="6-digit code"
+                      />
+                      <ShieldCheck className="absolute left-4 top-1/2 -translate-y-1/2 text-[#F0C927]/40" size={20} />
+                    </div>
+                  </div>
+
+                    <div className="space-y-2">
                     <label className="text-[10px] font-black uppercase tracking-widest text-white/40 px-2 flex items-center gap-2">
                       <Lock size={12} className="text-[#F0C927]/40" /> New Password
                     </label>

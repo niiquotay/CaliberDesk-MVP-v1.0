@@ -23,7 +23,6 @@ const AuthGate: React.FC<AuthGateProps> = ({ initialRole = 'seeker', onSelectSee
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
-  const [verificationToken, setVerificationToken] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
   const [isSendingCode, setIsSendingCode] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -49,7 +48,6 @@ const AuthGate: React.FC<AuthGateProps> = ({ initialRole = 'seeker', onSelectSee
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || "Failed to send verification code.");
-      setVerificationToken(data.verificationToken);
       setIsVerifying(true);
     } catch (err: any) {
       setError(err.message);
@@ -63,12 +61,13 @@ const AuthGate: React.FC<AuthGateProps> = ({ initialRole = 'seeker', onSelectSee
     setError(null);
 
     if (password !== confirmPassword) {
-      setError("Security hashes do not match.");
+      setError("Passwords do not match.");
       return;
     }
 
-    if (password.length < 6) {
-      setError("Security hash must be at least 6 characters.");
+    const passwordRegex = /^(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#$%^&*(),.?":{}|<>]).{8,}$/;
+    if (!passwordRegex.test(password)) {
+      setError("Password must be at least 8 characters long and contain at least one uppercase letter, one number, and one special character.");
       return;
     }
 
@@ -93,8 +92,7 @@ const AuthGate: React.FC<AuthGateProps> = ({ initialRole = 'seeker', onSelectSee
           email, 
           password, 
           isEmployer: role === 'employer',
-          verificationCode: role === 'seeker' ? verificationCode : undefined,
-          verificationToken: role === 'seeker' ? verificationToken : undefined
+          verificationCode: role === 'seeker' ? verificationCode : undefined
         }),
       });
 

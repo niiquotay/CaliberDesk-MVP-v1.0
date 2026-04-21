@@ -54,7 +54,8 @@ create table users (
   "verificationDocuments" text[],
   "pendingAssessmentReminders" jsonb default '[]',
   "employmentVerificationStatus" text default 'none',
-  "verificationCertificateUrl" text
+  "verificationCertificateUrl" text,
+  "is_deleted" boolean default false
 );
 
 -- Enable RLS
@@ -94,7 +95,8 @@ create table jobs (
   "applicationType" text default 'in-app',
   industry text,
   "postedBy" uuid references users(id),
-  "aptitudeTestId" text
+  "aptitudeTestId" text,
+  "is_deleted" boolean default false
 );
 
 -- Blog Posts Table
@@ -109,7 +111,8 @@ create table blog_posts (
   "videoUrl" text,
   tags text[],
   "readTime" text,
-  "isDraft" boolean default false
+  "isDraft" boolean default false,
+  "is_deleted" boolean default false
 );
 
 -- Applications Table
@@ -123,7 +126,8 @@ create table applications (
   "matchReason" text,
   "isAutoApplied" boolean default false,
   "statusHistory" jsonb default '[]',
-  "reminderSent7d" boolean default false
+  "reminderSent7d" boolean default false,
+  "is_deleted" boolean default false
 );
 
 -- Aptitude Tests Table
@@ -134,7 +138,8 @@ create table aptitude_tests (
   questions jsonb not null, -- Array of questions
   "timeLimit" integer,
   "createdAt" timestamp with time zone default now(),
-  difficulty text
+  difficulty text,
+  "is_deleted" boolean default false
 );
 
 -- Enable RLS for new tables

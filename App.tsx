@@ -148,6 +148,7 @@ const App: React.FC = () => {
   const [authGateRole, setAuthGateRole] = useState<'seeker' | 'employer'>('seeker');
   const [signInIsEmployer, setSignInIsEmployer] = useState(false);
   const [signInIsStaff, setSignInIsStaff] = useState(() => window.location.pathname === '/admin' || window.location.pathname === '/staff-login');
+  const [resetPasswordInfo, setResetPasswordInfo] = useState<{ email: string; code: string } | null>(null);
   const [showWelcomeEmail, setShowWelcomeEmail] = useState(false);
   const [hasApiKey, setHasApiKey] = useState<boolean | null>(null);
   const [pendingVerifications, setPendingVerifications] = useState<UserProfile[]>([]);
@@ -247,6 +248,17 @@ const App: React.FC = () => {
       }
     };
     window.addEventListener('popstate', handlePopState);
+
+    // Deep link for password reset
+    const params = new URLSearchParams(window.location.search);
+    const resetEmail = params.get('resetEmail');
+    const resetCode = params.get('resetCode');
+    if (resetEmail && resetCode) {
+      setResetPasswordInfo({ email: resetEmail, code: resetCode });
+      setView('signin');
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+
     return () => window.removeEventListener('popstate', handlePopState);
   }, [user]);
 
@@ -1129,9 +1141,20 @@ const App: React.FC = () => {
     }
   };
 
-  const handleDeleteJob = (jobId: string) => {
-    setJobs(prev => prev.filter(j => j.id !== jobId));
-    setToast({ message: "Job permanently removed.", type: 'success' });
+  const handleDeleteJob = async (jobId: string) => {
+    try {
+      const response = await fetch(`/api/jobs/${jobId}`, {
+        method: 'DELETE',
+      });
+      if (response.ok) {
+        setJobs(prev => prev.filter(j => j.id !== jobId));
+        setToast({ message: "Job archived successfuly.", type: 'success' });
+      } else {
+        throw new Error("Deletion failed");
+      }
+    } catch (err) {
+      setToast({ message: "Something went wrong. Please try again.", type: 'error' });
+    }
   };
 
   const handleUpgradeJob = (jobId: string) => {
@@ -1829,7 +1852,16 @@ const App: React.FC = () => {
           );
         })()}
         {view === 'settings' && !isDetailActive && <Settings user={user} setUser={setUser} onUpgradeRequest={() => {}} onBack={() => setView('seeker')} />}
-        {view === 'signin' && <SignIn onSignIn={handleSignIn} onBack={() => setView('home')} initialIsEmployer={signInIsEmployer} initialShowStaffPortal={signInIsStaff} onStaffPortalToggle={setSignInIsStaff} />}
+        {view === 'signin' && <SignIn 
+          onSignIn={handleSignIn} 
+          onBack={() => { setView('home'); setResetPasswordInfo(null); }} 
+          initialIsEmployer={signInIsEmployer} 
+          initialShowStaffPortal={signInIsStaff} 
+          onStaffPortalToggle={setSignInIsStaff} 
+          initialIsForgotPassword={!!resetPasswordInfo}
+          initialEmail={resetPasswordInfo?.email || ''}
+          initialResetCode={resetPasswordInfo?.code || ''}
+        />}
         {view === 'employer-profile' && !isDetailActive && <EmployerProfile user={user} setUser={setUser} onViewCompany={(name) => setActiveCompanyProfile(name)} onAddSubsidiary={handleAddSubsidiary} onComplete={() => setView('employer')} onBack={() => setView('employer')} />}
 
         {showJobAlerts && (

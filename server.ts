@@ -125,14 +125,14 @@ const USER_TABLE_KEYS = [
   'profileImages', 'workHistory', 'education', 'stealthMode', 'notifications', 'subUsers',
   'isAdmin', 'opRole', 'isDeactivated', 'deactivationDate', 'verificationEmail',
   'verificationMethod', 'verificationDocuments', 'pendingAssessmentReminders',
-  'employmentVerificationStatus', 'verificationCertificateUrl'
+  'employmentVerificationStatus', 'verificationCertificateUrl', 'is_deleted'
 ];
 
 const JOB_TABLE_KEYS = [
   'id', 'idNumber', 'title', 'company', 'city', 'country', 'location', 'category',
   'allowedCountries', 'salary', 'description', 'responsibilities', 'requirements',
   'tags', 'benefits', 'postedAt', 'expiryDate', 'isPremium', 'isQuickHire', 'status',
-  'applicationType', 'externalApplyUrl', 'industry', 'postedBy', 'aptitudeTestId'
+  'applicationType', 'externalApplyUrl', 'industry', 'postedBy', 'aptitudeTestId', 'is_deleted'
 ];
 
 const BLOG_POST_TABLE_KEYS = [
@@ -497,19 +497,24 @@ const notifyStaff = async (title: string, message: string, actionLink?: any) => 
     isEmployer: z.boolean().optional()
   });
 
-  const registerSchema = z.object({
-    firstName: z.string().min(1),
-    middleName: z.string().optional(),
-    lastName: z.string(),
-    email: z.string().email(),
-    password: z.string().min(6),
-    isEmployer: z.boolean(),
+const PASSWORD_VALIDATION = z.string()
+  .min(8, "Password must be at least 8 characters long")
+  .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
+  .regex(/[0-9]/, "Password must contain at least one number")
+  .regex(/[^A-Za-z0-9]/, "Password must contain at least one special character");
+
+const registerSchema = z.object({
+  firstName: z.string().min(1),
+  middleName: z.string().optional(),
+  lastName: z.string().min(1),
+  email: z.string().email(),
+  password: PASSWORD_VALIDATION,
+  isEmployer: z.boolean(),
     phone: z.string().optional().default(""),
     country: z.string().optional().default(""),
     companyName: z.string().optional(),
     subUsers: z.array(z.any()).optional(),
-    verificationCode: z.string().optional(),
-    verificationToken: z.string().optional()
+    verificationCode: z.string().optional()
   });
 
   // Auth Middleware
@@ -683,12 +688,11 @@ const notifyStaff = async (title: string, message: string, actionLink?: any) => 
 
   // Rate Limiters
   const authLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 10, // Limit each IP to 10 login/register attempts per window
-    message: { message: "Too many authentication attempts, please try again after 15 minutes" },
+    windowMs: 1 * 60 * 1000, // 1 minute
+    max: 5, // Limit each IP to 5 login/register attempts per minute
+    message: { message: "Too many authentication attempts. Please try again after a minute." },
     standardHeaders: true,
     legacyHeaders: false,
-    // Use default keyGenerator which handles IPv6 correctly
   });
 
   const passwordResetLimiter = rateLimit({
@@ -768,27 +772,26 @@ const notifyStaff = async (title: string, message: string, actionLink?: any) => 
     }
 
     const code = Math.floor(100000 + Math.random() * 900000).toString();
-    const token = jwt.sign({ identifier, code }, FINAL_JWT_SECRET, { expiresIn: '10m' });
+    verificationCodes[identifier] = {
+      code,
+      expires: Date.now() + 10 * 60 * 1000 // 10 minutes
+    };
 
     // In a real app, send via SMS/Email here
-    res.json({ message: "Verification code sent successfully", verificationToken: token });
+    res.json({ message: "Verification code sent successfully" });
   });
 
   app.post("/api/auth/verify-code", async (req, res) => {
-    const { email, phone, code, verificationToken } = req.body;
+    const { email, phone, code } = req.body;
     const identifier = email || phone;
     
-    if (!verificationToken) return res.status(400).json({ message: "Verification session missing, please resend code." });
-    
-    try {
-      const decoded = jwt.verify(verificationToken, FINAL_JWT_SECRET) as any;
-      if (decoded.identifier !== identifier || decoded.code !== code) {
-        return res.status(400).json({ message: "Invalid verification code" });
-      }
-      res.json({ message: "Code verified successfully" });
-    } catch (err) {
-      return res.status(400).json({ message: "Expired or invalid verification code" });
+    const record = verificationCodes[identifier];
+    if (!record || record.code !== code || record.expires < Date.now()) {
+      return res.status(400).json({ message: "Invalid or expired verification code" });
     }
+
+    delete verificationCodes[identifier];
+    res.json({ message: "Code verified successfully" });
   });
 
   app.post("/api/auth/register", authLimiter, async (req, res) => {
@@ -798,7 +801,7 @@ const notifyStaff = async (title: string, message: string, actionLink?: any) => 
         return res.status(400).json({ message: "Invalid input data", errors: (validation.error as any).errors });
       }
 
-      const { firstName, middleName, lastName, email, password, isEmployer, phone, country, companyName, subUsers, verificationCode, verificationToken } = validation.data;
+      const { firstName, middleName, lastName, email, password, isEmployer, phone, country, companyName, subUsers, verificationCode } = validation.data;
       const name = `${firstName} ${middleName ? middleName + ' ' : ''}${lastName}`;
       
       if (email.toLowerCase().endsWith('@caliberdesk.com')) {
@@ -806,17 +809,14 @@ const notifyStaff = async (title: string, message: string, actionLink?: any) => 
       }
 
       if (!isEmployer) {
-        if (!verificationCode || !verificationToken) {
+        if (!verificationCode) {
           return res.status(400).json({ message: "Verification code is required for seeker registration." });
         }
-        try {
-          const decoded = jwt.verify(verificationToken, FINAL_JWT_SECRET) as any;
-          if (decoded.identifier !== email || decoded.code !== verificationCode) {
-            return res.status(400).json({ message: "Invalid verification code." });
-          }
-        } catch (err) {
-          return res.status(400).json({ message: "Expired or invalid verification code." });
+        const record = verificationCodes[email];
+        if (!record || record.code !== verificationCode || record.expires < Date.now()) {
+          return res.status(400).json({ message: "Invalid or expired verification code." });
         }
+        delete verificationCodes[email];
       }
 
       // Check for duplicate account with SAME role in Supabase
@@ -887,7 +887,7 @@ const notifyStaff = async (title: string, message: string, actionLink?: any) => 
 
       if (insertError) {
         console.error("Supabase insert error:", insertError);
-        return res.status(500).json({ message: "An unexpected error occurred. Please try again later." });
+        return res.status(500).json({ message: "Something went wrong. Please try again." });
       }
 
       if (isEmployer) {
@@ -905,7 +905,7 @@ const notifyStaff = async (title: string, message: string, actionLink?: any) => 
       res.json(userWithoutPassword);
     } catch (error) {
       console.error("Registration error:", error);
-      res.status(500).json({ message: "An unexpected error occurred. Please try again later." });
+      res.status(500).json({ message: "Something went wrong. Please try again." });
     }
   });
 
@@ -922,7 +922,8 @@ const notifyStaff = async (title: string, message: string, actionLink?: any) => 
       let query = supabase
         .from('users')
         .select('*')
-        .eq('email', email.toLowerCase());
+        .eq('email', email.toLowerCase())
+        .or('is_deleted.is.null,is_deleted.eq.false');
       
       if (isEmployer !== undefined) {
         query = query.eq('isEmployer', !!isEmployer);
@@ -937,6 +938,7 @@ const notifyStaff = async (title: string, message: string, actionLink?: any) => 
           .select('*')
           .eq('email', email.toLowerCase())
           .eq('isAdmin', true)
+          .or('is_deleted.is.null,is_deleted.eq.false')
           .single();
         
         if (!staffUser) {
@@ -948,7 +950,7 @@ const notifyStaff = async (title: string, message: string, actionLink?: any) => 
       return handleLogin(user, password, res);
     } catch (error) {
       console.error("Login error:", error);
-      res.status(500).json({ message: "An unexpected error occurred. Please try again later." });
+      res.status(500).json({ message: "Something went wrong. Please try again." });
     }
   });
 
@@ -963,14 +965,44 @@ const notifyStaff = async (title: string, message: string, actionLink?: any) => 
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
-    if (user.isDeactivated) {
+    if (user.isDeactivated || user.is_deleted) {
       return res.status(403).json({ 
-        message: "Your account has been deactivated due to incomplete verification within 3 days. Please contact support@caliberdesk.com to reactivate." 
+        message: user.is_deleted ? "This account has been deleted." : "Your account has been deactivated due to incomplete verification within 3 days. Please contact support@caliberdesk.com to reactivate." 
       });
     }
 
-    const token = jwt.sign({ email: user.email, isEmployer: user.isEmployer, isAdmin: user.isAdmin, role: user.role }, FINAL_JWT_SECRET, { expiresIn: "24h" });
-    res.cookie("token", token, { httpOnly: true, secure: true, sameSite: "none" });
+    const accessToken = jwt.sign(
+      { 
+        email: user.email, 
+        isEmployer: user.isEmployer, 
+        isAdmin: user.isAdmin, 
+        role: user.role,
+        id: user.id
+      }, 
+      FINAL_JWT_SECRET, 
+      { expiresIn: "1h" }
+    );
+    
+    // Refresh token logic
+    const refreshToken = jwt.sign(
+      { id: user.id, type: 'refresh' },
+      FINAL_JWT_SECRET,
+      { expiresIn: "14d" }
+    );
+
+    res.cookie("token", accessToken, { 
+      httpOnly: true, 
+      secure: true, 
+      sameSite: "none",
+      maxAge: 3600000 // 1 hour
+    });
+
+    res.cookie("refreshToken", refreshToken, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "none",
+      maxAge: 14 * 24 * 3600000 // 14 days
+    });
 
     const { password: _, ...userWithoutPassword } = user;
     res.json(userWithoutPassword);
@@ -1195,7 +1227,36 @@ const notifyStaff = async (title: string, message: string, actionLink?: any) => 
 
   app.post("/api/auth/logout", (req, res) => {
     res.clearCookie("token", { httpOnly: true, secure: true, sameSite: "none" });
+    res.clearCookie("refreshToken", { httpOnly: true, secure: true, sameSite: "none" });
     res.json({ message: "Logged out successfully" });
+  });
+
+  app.post("/api/auth/refresh", async (req, res) => {
+    const refreshToken = req.cookies.refreshToken;
+    if (!refreshToken) return res.status(401).json({ message: "No refresh token provided" });
+
+    try {
+      const decoded: any = jwt.verify(refreshToken, FINAL_JWT_SECRET);
+      if (decoded.type !== 'refresh') throw new Error("Invalid token type");
+
+      const { data: user, error } = await supabase.from('users').select('*').eq('id', decoded.id).single();
+      if (error || !user || user.isDeactivated || user.is_deleted) {
+        return res.status(403).json({ message: "User not authorized" });
+      }
+
+      const accessToken = jwt.sign(
+        { email: user.email, isEmployer: user.isEmployer, isAdmin: user.isAdmin, role: user.role, id: user.id },
+        FINAL_JWT_SECRET,
+        { expiresIn: "1h" }
+      );
+
+      res.cookie("token", accessToken, { httpOnly: true, secure: true, sameSite: "none", maxAge: 3600000 });
+      res.json({ message: "Token refreshed successfuly" });
+    } catch (err) {
+      res.clearCookie("token");
+      res.clearCookie("refreshToken");
+      res.status(403).json({ message: "Invalid refresh token" });
+    }
   });
 
   // Jobs Routes
@@ -1204,6 +1265,7 @@ const notifyStaff = async (title: string, message: string, actionLink?: any) => 
       .from('jobs')
       .select('*')
       .eq('status', 'active')
+      .or('is_deleted.is.null,is_deleted.eq.false')
       .order('postedAt', { ascending: false });
     
     if (error) {
@@ -1221,6 +1283,28 @@ const notifyStaff = async (title: string, message: string, actionLink?: any) => 
     
     if (error || !job) return res.status(404).json({ message: "Job not found" });
     res.json(job);
+  });
+
+  app.delete("/api/jobs/:id", authenticateToken, async (req: any, res) => {
+    try {
+      const { data: job } = await supabase.from('jobs').select('postedBy').eq('id', req.params.id).single();
+      if (!job) return res.status(404).json({ message: "Job not found" });
+
+      const { data: user } = await supabase.from('users').select('id, isAdmin, opRole').eq('email', req.user.email).single();
+      
+      if (job.postedBy !== user?.id && !user?.isAdmin && user?.opRole !== 'super_admin') {
+        return res.status(403).json({ message: "Unauthorized" });
+      }
+
+      const { error } = await supabase.from('jobs').update({ is_deleted: true, status: 'closed' }).eq('id', req.params.id);
+      if (error) {
+        console.error("Failed to delete job:", error);
+        return res.status(500).json({ message: "Something went wrong. Please try again." });
+      }
+      res.json({ message: "Job archived successfuly" });
+    } catch (error) {
+      res.status(500).json({ message: "Something went wrong. Please try again." });
+    }
   });
 
   app.post("/api/jobs", authenticateToken, async (req: any, res) => {
@@ -1336,6 +1420,7 @@ const notifyStaff = async (title: string, message: string, actionLink?: any) => 
       .from('blog_posts')
       .select('*')
       .eq('isDraft', false)
+      .or('is_deleted.is.null,is_deleted.eq.false')
       .order('publishedAt', { ascending: false });
     
     if (error) {
@@ -1390,12 +1475,12 @@ const notifyStaff = async (title: string, message: string, actionLink?: any) => 
       return res.status(403).json({ message: "Unauthorized" });
     }
 
-    const { error } = await supabase.from('blog_posts').delete().eq('id', req.params.id);
+    const { error } = await supabase.from('blog_posts').update({ is_deleted: true }).eq('id', req.params.id);
     if (error) {
       console.error("Failed to delete post:", error);
-      return res.status(500).json({ message: "An unexpected error occurred. Please try again later." });
+      return res.status(500).json({ message: "Something went wrong. Please try again." });
     }
-    res.json({ message: "Post deleted" });
+    res.json({ message: "Post archived" });
   });
 
   // Aptitude Test Routes
@@ -1422,18 +1507,54 @@ const notifyStaff = async (title: string, message: string, actionLink?: any) => 
   });
 
   // Application Routes
+  app.get("/api/applications", authenticateToken, async (req: any, res) => {
+    try {
+      const { data: user } = await supabase.from('users').select('id, isAdmin, opRole, isEmployer').eq('email', req.user.email).single();
+      if (!user) return res.status(401).json({ message: "User not found" });
+
+      let query;
+      if (user.isAdmin || user.opRole === 'super_admin') {
+        query = supabase.from('applications').select('*, jobs(*)');
+      } else if (user.isEmployer) {
+        query = supabase.from('applications').select('*, jobs!inner(*)').eq('jobs.postedBy', user.id);
+      } else {
+        query = supabase.from('applications').select('*, jobs(*)').eq('userId', user.id);
+      }
+
+      const { data: apps, error } = await query;
+      if (error) throw error;
+      
+      // Filter out apps for archived jobs if seeker
+      const filteredApps = (user.isAdmin || user.opRole === 'super_admin') 
+        ? apps 
+        : apps.filter((a: any) => !a.jobs?.is_deleted);
+
+      res.json(filteredApps || []);
+    } catch (error) {
+      console.error("Fetch applications error:", error);
+      res.status(500).json({ message: "Something went wrong. Please try again." });
+    }
+  });
+
   app.post("/api/applications", authenticateToken, async (req: any, res) => {
     const { jobId, matchScore, matchReason, isAutoApplied } = req.body;
     
+    // Check if job exists and is not deleted
+    const { data: job } = await supabase.from('jobs').select('is_deleted, title, company').eq('id', jobId).single();
+    if (!job || job.is_deleted) {
+      return res.status(400).json({ message: "This job is no longer available." });
+    }
+
     const { data: user } = await supabase.from('users').select('*').eq('email', req.user.email).single();
-    
+    if (!user) return res.status(401).json({ message: "User not found" });
+
     const newApplication = {
       jobId,
-      userId: user?.id,
+      userId: user.id,
       status: 'applied',
       appliedDate: new Date().toISOString(),
-      matchScore,
-      matchReason,
+      matchScore: matchScore || 0,
+      matchReason: matchReason || "",
       isAutoApplied: !!isAutoApplied,
       statusHistory: [{ status: 'applied', date: new Date().toISOString() }]
     };
@@ -1445,8 +1566,8 @@ const notifyStaff = async (title: string, message: string, actionLink?: any) => 
     }
 
     // Send confirmation notification
-    const job = insertedApp.jobs;
-    const confirmMsg = `Your application for ${job.title} at ${job.company} has been successfully submitted. We'll notify you of any updates.`;
+    const jobData = insertedApp.jobs;
+    const confirmMsg = `Your application for ${jobData.title} at ${jobData.company} has been successfully submitted. We'll notify you of any updates.`;
     const notifications = user.notifications || [];
     notifications.unshift({
       id: Math.random().toString(36).substr(2, 9),
